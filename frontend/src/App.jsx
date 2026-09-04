@@ -38,7 +38,7 @@ function App() {
   };
 
   return (
-    <div style={{ maxWidth: '400px', margin: '50px auto', fontFamily: 'Arial, sans-serif' }}>
+    <div style={{ maxWidth: '400px', margin: '50px auto' }}>
       <h2>Banking Digital Login</h2>
 
       {message && <div style={{ color: 'green', marginBottom: '10px' }}>{message}</div>}
