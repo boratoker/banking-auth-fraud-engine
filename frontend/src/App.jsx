@@ -1,122 +1,92 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import React, { useState } from 'react';
+import { login, verifyOtp } from './api/authApi';
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [step, setStep] = useState(1); // Step 1: Login, Step 2: OTP
+  const [username, setUsername] = useState('');
+  const [otp, setOtp] = useState('');
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  const handleLoginSubmit = async (e) => {
+    e.preventDefault();
+    setMessage('');
+    setError('');
+    try {
+      const response = await login(username);
+      setMessage(response.data);
+      setStep(2);
+    } catch (err) {
+      if (err.response && err.response.status === 429) {
+        setError('Çok fazla istek atıldı! API Gateway Rate Limit devreye girdi.');
+      } else {
+        setError('Giriş isteği başarısız: ' + (err.response?.data || err.message));
+      }
+    }
+  };
+
+  const handleOtpSubmit = async (e) => {
+    e.preventDefault();
+    setMessage('');
+    setError('');
+    try {
+      const response = await verifyOtp(username, otp);
+      setMessage(response.data);
+    } catch (err) {
+      setError('OTP Doğrulama Başarısız: ' + (err.response?.data || err.message));
+    }
+  };
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <div style={{ maxWidth: '400px', margin: '50px auto', fontFamily: 'Arial, sans-serif' }}>
+      <h2>Banking Digital Login</h2>
 
-      <div className="ticks"></div>
+      {message && <div style={{ color: 'green', marginBottom: '10px' }}>{message}</div>}
+      {error && <div style={{ color: 'red', marginBottom: '10px' }}>{error}</div>}
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+      {step === 1 ? (
+        <form onSubmit={handleLoginSubmit}>
+          <div style={{ marginBottom: '10px' }}>
+            <label>Kullanıcı Adı: </label>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              required
+              style={{ width: '100%', padding: '8px', marginTop: '5px' }}
+            />
+          </div>
+          <button type="submit" style={{ width: '100%', padding: '10px', background: '#007bff', color: '#fff', border: 'none' }}>
+            OTP Gönder
+          </button>
+        </form>
+      ) : (
+        <form onSubmit={handleOtpSubmit}>
+          <div style={{ marginBottom: '10px' }}>
+            <label>6 Haneli OTP Kodu: </label>
+            <input
+              type="text"
+              value={otp}
+              onChange={(e) => setOtp(e.target.value)}
+              required
+              maxLength="6"
+              style={{ width: '100%', padding: '8px', marginTop: '5px' }}
+            />
+          </div>
+          <button type="submit" style={{ width: '100%', padding: '10px', background: '#28a745', color: '#fff', border: 'none' }}>
+            Doğrula ve Giriş Yap
+          </button>
+          <button
+            type="button"
+            onClick={() => setStep(1)}
+            style={{ width: '100%', padding: '10px', marginTop: '5px', background: '#6c757d', color: '#fff', border: 'none' }}
+          >
+            Geri Dön
+          </button>
+        </form>
+      )}
+    </div>
+  );
 }
 
-export default App
+export default App;
