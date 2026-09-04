@@ -1,0 +1,41 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+  data:
+    redis:
+      host: localhost
+      port: 6379
+  cloud:
+    gateway:
+      routes:
+        # Auth Service Route & Rate Limiter Configuration
+        - id: auth-service
+          uri: http://localhost:8081
+          predicates:
+            - Path=/api/v1/auth/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 10   # Saniyede yenilenen jeton (Token) sayısı
+                redis-rate-limiter.burstCapacity: 20   # Anlık maksimum istek kapasitesi
+                redis-rate-limiter.requestedTokens: 1  # İstek başına harcanan jeton
+                key-resolver: "#{@ipKeyResolver}"
+
+        # Fraud Service Route Configuration
+        - id: fraud-service
+          uri: http://localhost:8082
+          predicates:
+            - Path=/api/v1/fraud/**
+
+# Prometheus & Actuator Metrics Config
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus,info
+  metrics:
+    tags:
+      application: ${spring.application.name}
