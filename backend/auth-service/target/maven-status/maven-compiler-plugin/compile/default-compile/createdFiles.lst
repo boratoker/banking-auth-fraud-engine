@@ -1,4 +1,9 @@
 com/banking/auth/AuthServiceApplication.class
+com/banking/auth/dto/CheckEmailRequest.class
 com/banking/auth/controller/AuthController.class
-com/banking/auth/service/EmailService.class
+com/banking/auth/dto/VerifyOtpRequest.class
+com/banking/auth/dto/RegisterRequest.class
 com/banking/auth/consumer/NotificationConsumer.class
+com/banking/auth/repository/UserRepository.class
+com/banking/auth/model/User.class
+com/banking/auth/service/EmailService.class
