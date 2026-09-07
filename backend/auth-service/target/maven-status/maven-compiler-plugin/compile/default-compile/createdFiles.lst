@@ -1,3 +1,4 @@
+com/banking/auth/controller/BankingController.class
 com/banking/auth/AuthServiceApplication.class
 com/banking/auth/dto/CheckEmailRequest.class
 com/banking/auth/controller/AuthController.class

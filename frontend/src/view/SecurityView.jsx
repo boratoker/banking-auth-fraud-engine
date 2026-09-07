@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { getSecuritySessions, terminateSession } from '../api/bankingApi';
 
 const SecurityView = () => {
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(true);
@@ -12,8 +13,21 @@ const SecurityView = () => {
     { id: 3, device: 'Windows Desktop', ip: '88.241.12.50', location: 'Ankara, Türkiye', browser: 'Edge 126.0', isCurrent: false, time: 'Dün, 19:40' },
   ]);
 
-  const handleTerminateSession = (id) => {
-    setActiveSessions(activeSessions.filter(s => s.id !== id));
+  useEffect(() => {
+    getSecuritySessions()
+      .then(res => {
+        if (Array.isArray(res.data)) setActiveSessions(res.data);
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleTerminateSession = async (id) => {
+    setActiveSessions(prev => prev.filter(s => s.id !== id));
+    try {
+      await terminateSession(id);
+    } catch (e) {
+      // Fallback
+    }
   };
 
   return (
@@ -129,7 +143,7 @@ const SecurityView = () => {
             {activeSessions.map((session) => (
               <div key={session.id} className="session-item">
                 <div className="device-icon">
-                  {session.device.includes('MacBook') || session.device.includes('Windows') ? '💻' : '📱'}
+                  {session.device && (session.device.includes('MacBook') || session.device.includes('Windows')) ? '💻' : '📱'}
                 </div>
                 <div className="session-info">
                   <div className="session-device-name">

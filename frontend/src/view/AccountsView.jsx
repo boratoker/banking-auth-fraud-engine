@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { getAccounts, getCardDetails, toggleCardFreeze, toggleCardSetting } from '../api/bankingApi';
 
 const AccountsView = () => {
   const [showCardDetails, setShowCardDetails] = useState(false);
@@ -7,12 +8,47 @@ const AccountsView = () => {
   const [overseasAllowed, setOverseasAllowed] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState(null);
 
-  const accounts = [
+  const [accounts, setAccounts] = useState([
     { id: 1, name: 'Ana Vadesiz TL Hesabı', iban: 'TR32 0006 1000 0000 1234 5678 90', balance: 148250.75, currency: 'TRY', type: 'Vadesiz' },
     { id: 2, name: 'Büyüyen Vadeli Birikim', iban: 'TR32 0006 1000 0000 9876 5432 11', balance: 85000.00, currency: 'TRY', type: 'Vadeli (%48.5)' },
     { id: 3, name: 'USD Döviz Hesabı', iban: 'TR32 0006 1000 0000 4455 6677 88', balance: 4250.00, currency: 'USD', type: 'Döviz' },
     { id: 4, name: 'EUR Döviz Hesabı', iban: 'TR32 0006 1000 0000 1122 3344 55', balance: 1800.50, currency: 'EUR', type: 'Döviz' },
-  ];
+  ]);
+
+  useEffect(() => {
+    // Fetch accounts and card state from backend REST API
+    getAccounts()
+      .then(res => setAccounts(res.data))
+      .catch(() => {});
+
+    getCardDetails()
+      .then(res => {
+        if (res.data) {
+          setIsCardFrozen(!!res.data.isFrozen);
+          setInternetAllowed(res.data.internetAllowed !== false);
+          setOverseasAllowed(!!res.data.overseasAllowed);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleFreezeToggle = async (checked) => {
+    setIsCardFrozen(checked);
+    try {
+      await toggleCardFreeze(checked);
+    } catch (e) {
+      // Fallback local state already updated
+    }
+  };
+
+  const handleSettingToggle = async (key, value, setter) => {
+    setter(value);
+    try {
+      await toggleCardSetting(key, value);
+    } catch (e) {
+      // Fallback
+    }
+  };
 
   const handleCopyIban = (iban, index) => {
     navigator.clipboard.writeText(iban.replace(/\s+/g, ''));
@@ -90,7 +126,7 @@ const AccountsView = () => {
                 <input 
                   type="checkbox" 
                   checked={isCardFrozen} 
-                  onChange={(e) => setIsCardFrozen(e.target.checked)} 
+                  onChange={(e) => handleFreezeToggle(e.target.checked)} 
                 />
                 <span className="slider round"></span>
               </label>
@@ -106,7 +142,7 @@ const AccountsView = () => {
                   type="checkbox" 
                   checked={internetAllowed} 
                   disabled={isCardFrozen}
-                  onChange={(e) => setInternetAllowed(e.target.checked)} 
+                  onChange={(e) => handleSettingToggle('internetAllowed', e.target.checked, setInternetAllowed)} 
                 />
                 <span className="slider round"></span>
               </label>
@@ -122,7 +158,7 @@ const AccountsView = () => {
                   type="checkbox" 
                   checked={overseasAllowed} 
                   disabled={isCardFrozen}
-                  onChange={(e) => setOverseasAllowed(e.target.checked)} 
+                  onChange={(e) => handleSettingToggle('overseasAllowed', e.target.checked, setOverseasAllowed)} 
                 />
                 <span className="slider round"></span>
               </label>

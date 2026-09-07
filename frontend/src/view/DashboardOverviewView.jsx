@@ -1,18 +1,33 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { getOverviewData } from '../api/bankingApi';
 
 const DashboardOverviewView = ({ userName, onNavigate }) => {
   const [showBalances, setShowBalances] = useState(true);
+  const [overview, setOverview] = useState({
+    totalBalance: 148250.75,
+    savingsBalance: 85000.00,
+    creditCardSpent: 28450.20,
+    creditCardLimit: 100000.00,
+    riskScore: 98,
+    recentTransactions: [
+      { id: 1, title: 'Migros Sanal Market', date: 'Bugün, 14:22', amount: -482.50, category: 'Alışveriş', risk: 'Safe', riskScore: '1%' },
+      { id: 2, title: 'Gelen Transfer - Ahmet Yıl.', date: 'Bugün, 11:05', amount: 3500.00, category: 'FAST Transfer', risk: 'Safe', riskScore: '0%' },
+      { id: 3, title: 'Netflix Abonelik', date: 'Dün, 22:15', amount: -199.99, category: 'Eğlence', risk: 'Safe', riskScore: '2%' },
+      { id: 4, title: 'Shell Yakıt Alımı', date: '05 Eylül, 18:40', amount: -1250.00, category: 'Ulaşım', risk: 'Safe', riskScore: '3%' },
+    ]
+  });
+
+  useEffect(() => {
+    getOverviewData()
+      .then(res => {
+        if (res.data) setOverview(prev => ({ ...prev, ...res.data }));
+      })
+      .catch(() => {});
+  }, []);
 
   const formatCurrency = (val) => {
-    return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(val);
+    return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(val || 0);
   };
-
-  const recentTransactions = [
-    { id: 1, title: 'Migros Sanal Market', date: 'Bugün, 14:22', amount: -482.50, category: 'Alışveriş', risk: 'Safe', riskScore: '1%' },
-    { id: 2, title: 'Gelen Transfer - Ahmet Yıl.', date: 'Bugün, 11:05', amount: 3500.00, category: 'FAST Transfer', risk: 'Safe', riskScore: '0%' },
-    { id: 3, title: 'Netflix Abonelik', date: 'Dün, 22:15', amount: -199.99, category: 'Eğlence', risk: 'Safe', riskScore: '2%' },
-    { id: 4, title: 'Shell Yakıt Alımı', date: '05 Eylül, 18:40', amount: -1250.00, category: 'Ulaşım', risk: 'Safe', riskScore: '3%' },
-  ];
 
   return (
     <div className="view-container overview-view">
@@ -38,7 +53,7 @@ const DashboardOverviewView = ({ userName, onNavigate }) => {
             <span className="card-chip">Vadesiz TL</span>
           </div>
           <div className="card-value">
-            {showBalances ? formatCurrency(148250.75) : '•••••••• ₺'}
+            {showBalances ? formatCurrency(overview.totalBalance) : '•••••••• ₺'}
           </div>
           <div className="card-footer">
             <span className="badge positive">+₺12,500.00 bu ay</span>
@@ -52,7 +67,7 @@ const DashboardOverviewView = ({ userName, onNavigate }) => {
             <span className="card-chip">%48.5 Faiz</span>
           </div>
           <div className="card-value">
-            {showBalances ? formatCurrency(85000.00) : '•••••••• ₺'}
+            {showBalances ? formatCurrency(overview.savingsBalance) : '•••••••• ₺'}
           </div>
           <div className="card-footer">
             <span className="footer-meta">Vade Sonu: 18 Ekim 2026</span>
@@ -65,13 +80,13 @@ const DashboardOverviewView = ({ userName, onNavigate }) => {
             <span className="card-chip">Limit: ₺100.000</span>
           </div>
           <div className="card-value">
-            {showBalances ? formatCurrency(28450.20) : '•••••••• ₺'}
+            {showBalances ? formatCurrency(overview.creditCardSpent) : '•••••••• ₺'}
           </div>
           <div className="card-footer">
             <div className="progress-bar-container">
               <div className="progress-bar-fill" style={{ width: '28%' }}></div>
             </div>
-            <span className="footer-meta">Kullanılabilir Limit: ₺71,549.80</span>
+            <span className="footer-meta">Kullanılabilir Limit: ₺{(overview.creditCardLimit - overview.creditCardSpent).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</span>
           </div>
         </div>
       </div>
@@ -91,7 +106,7 @@ const DashboardOverviewView = ({ userName, onNavigate }) => {
           <div className="fraud-widget-content">
             <div className="score-ring-container">
               <div className="score-ring">
-                <span className="score-number">98</span>
+                <span className="score-number">{overview.riskScore || 98}</span>
                 <span className="score-max">/100</span>
               </div>
               <div className="score-info">
@@ -177,7 +192,7 @@ const DashboardOverviewView = ({ userName, onNavigate }) => {
               </tr>
             </thead>
             <tbody>
-              {recentTransactions.map((tx) => (
+              {overview.recentTransactions.map((tx) => (
                 <tr key={tx.id}>
                   <td>
                     <div className="tx-title-wrapper">

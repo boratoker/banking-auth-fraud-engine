@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { getTransactions } from '../api/bankingApi';
 
 const TransactionsView = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [selectedRisk, setSelectedRisk] = useState('ALL');
 
-  const allTransactions = [
+  const [allTransactions, setAllTransactions] = useState([
     { id: 1, title: 'Migros Sanal Market', date: '07 Eyl 2026, 14:22', amount: -482.50, category: 'Alışveriş', risk: 'Safe', riskScore: '1%', status: 'Başarılı' },
     { id: 2, title: 'Gelen Transfer - Ahmet Yıl.', date: '07 Eyl 2026, 11:05', amount: 3500.00, category: 'Transfer', risk: 'Safe', riskScore: '0%', status: 'Başarılı' },
     { id: 3, title: 'Netflix Abonelik', date: '06 Eyl 2026, 22:15', amount: -199.99, category: 'Eğlence', risk: 'Safe', riskScore: '2%', status: 'Başarılı' },
@@ -14,7 +15,15 @@ const TransactionsView = () => {
     { id: 6, title: 'Amazon TR Sipariş', date: '30 Ağu 2026, 16:10', amount: -2450.00, category: 'Alışveriş', risk: 'Safe', riskScore: '1%', status: 'Başarılı' },
     { id: 7, title: 'Elektrik Faturası - CK Enerji', date: '28 Ağu 2026, 10:30', amount: -820.00, category: 'Fatura', risk: 'Safe', riskScore: '0%', status: 'Başarılı' },
     { id: 8, title: 'Yabancı E-Ticaret Denemesi', date: '25 Ağu 2026, 03:14', amount: -12500.00, category: 'Alışveriş', risk: 'Flagged', riskScore: '74%', status: 'Fraud İncelemesinde' },
-  ];
+  ]);
+
+  useEffect(() => {
+    getTransactions()
+      .then(res => {
+        if (Array.isArray(res.data) && res.data.length > 0) setAllTransactions(res.data);
+      })
+      .catch(() => {});
+  }, []);
 
   const filteredTransactions = allTransactions.filter((tx) => {
     const matchesSearch = tx.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
