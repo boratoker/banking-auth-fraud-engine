@@ -7,11 +7,11 @@ const TransferView = () => {
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [selectedAccount, setSelectedAccount] = useState('TR320006100000001234567890');
-  
+
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
-  
+
   // Fraud Modal State
   const [showFraudModal, setShowFraudModal] = useState(false);
   const [fraudModalData, setFraudModalData] = useState(null);
@@ -138,8 +138,8 @@ const TransferView = () => {
           <form onSubmit={handleTransferSubmit}>
             <div className="form-group">
               <label className="form-label">Gönderen Hesap</label>
-              <select 
-                className="form-input" 
+              <select
+                className="form-input"
                 value={selectedAccount}
                 onChange={(e) => setSelectedAccount(e.target.value)}
               >
@@ -154,8 +154,8 @@ const TransferView = () => {
 
             <div className="form-group">
               <label className="form-label">Alıcı IBAN</label>
-              <input 
-                type="text" 
+              <input
+                type="text"
                 className="form-input"
                 placeholder="TR00 0000 0000 0000 0000 0000 00"
                 value={recipientIban}
@@ -166,8 +166,8 @@ const TransferView = () => {
 
             <div className="form-group">
               <label className="form-label">Alıcı Adı Soyadı</label>
-              <input 
-                type="text" 
+              <input
+                type="text"
                 className="form-input"
                 placeholder="Örn: Ahmet Yılmaz"
                 value={recipientName}
@@ -178,8 +178,8 @@ const TransferView = () => {
 
             <div className="form-group">
               <label className="form-label">Tutar (TL)</label>
-              <input 
-                type="number" 
+              <input
+                type="number"
                 className="form-input"
                 placeholder="0.00"
                 value={amount}
@@ -195,8 +195,8 @@ const TransferView = () => {
 
             <div className="form-group">
               <label className="form-label">Açıklama</label>
-              <input 
-                type="text" 
+              <input
+                type="text"
                 className="form-input"
                 placeholder="Örn: Kira Ödemesi / Borç"
                 value={description}
@@ -216,8 +216,8 @@ const TransferView = () => {
             <h3>Kayıtlı Kişiler</h3>
             <div className="contacts-list">
               {savedContacts.map((contact, idx) => (
-                <div 
-                  key={idx} 
+                <div
+                  key={idx}
                   className="contact-item"
                   onClick={() => {
                     setRecipientName(contact.name);
@@ -238,10 +238,10 @@ const TransferView = () => {
           <div className="widget-card fraud-shield-info-box">
             <div className="shield-header">
               <span className="shield-icon">🛡️</span>
-              <h4>Apex AI Fraud Protection</h4>
+              <h4>Toker AI Fraud Protection</h4>
             </div>
             <p>
-              ApexBank, tüm FAST ve EFT işlemlerini anlık davranışsal biyometri, cihaz lokasyonu ve yapay zeka risk algoritmaları ile tarar.
+              TokerBank, tüm FAST ve EFT işlemlerini anlık davranışsal biyometri, cihaz lokasyonu ve yapay zeka risk algoritmaları ile tarar.
             </p>
           </div>
         </div>
@@ -271,8 +271,8 @@ const TransferView = () => {
 
               <div className="form-group" style={{ marginTop: '16px' }}>
                 <label className="form-label">SMS 6-Haneli Doğrulama Kodu</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   className="form-input otp-input"
                   placeholder="123456"
                   maxLength="6"

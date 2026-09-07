@@ -13,16 +13,16 @@ const Navbar = ({ userName, email, onLogout, userRiskScore = 98 }) => {
       <div className="navbar-brand">
         <div className="brand-icon">🛡️</div>
         <div className="brand-text">
-          <span className="brand-title">ApexBank</span>
+          <span className="brand-title">TokerBank</span>
           <span className="brand-subtitle">Auth & Fraud Shield</span>
         </div>
       </div>
 
       <div className="navbar-search">
         <span className="search-icon">🔍</span>
-        <input 
-          type="text" 
-          placeholder="Hesap, transfer veya işlem ara..." 
+        <input
+          type="text"
+          placeholder="Hesap, transfer veya işlem ara..."
           className="search-input"
         />
       </div>

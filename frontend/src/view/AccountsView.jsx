@@ -19,7 +19,7 @@ const AccountsView = () => {
     // Fetch accounts and card state from backend REST API
     getAccounts()
       .then(res => setAccounts(res.data))
-      .catch(() => {});
+      .catch(() => { });
 
     getCardDetails()
       .then(res => {
@@ -29,7 +29,7 @@ const AccountsView = () => {
           setOverseasAllowed(!!res.data.overseasAllowed);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const handleFreezeToggle = async (checked) => {
@@ -68,7 +68,7 @@ const AccountsView = () => {
         <div className="card-management-section">
           <div className={`credit-card-visual ${isCardFrozen ? 'frozen' : ''}`}>
             <div className="card-top">
-              <span className="card-brand-logo">ApexBank</span>
+              <span className="card-brand-logo">TokerBank</span>
               <span className="card-type-tag">PLATINUM VIRTUAL</span>
             </div>
 
@@ -103,13 +103,13 @@ const AccountsView = () => {
           {/* Card Controls */}
           <div className="card-controls-panel">
             <h3>Sanal Kart Güvenlik Ayarları</h3>
-            
+
             <div className="control-row">
               <div className="control-info">
                 <span className="control-title">Kart Bilgilerini Göster</span>
                 <span className="control-desc">Kart numarası ve CVV kodunu ekranda açıklar.</span>
               </div>
-              <button 
+              <button
                 className="btn-toggle-sm"
                 onClick={() => setShowCardDetails(!showCardDetails)}
               >
@@ -123,10 +123,10 @@ const AccountsView = () => {
                 <span className="control-desc">Tüm fiziki ve sanal harcamaları anında engeller.</span>
               </div>
               <label className="switch">
-                <input 
-                  type="checkbox" 
-                  checked={isCardFrozen} 
-                  onChange={(e) => handleFreezeToggle(e.target.checked)} 
+                <input
+                  type="checkbox"
+                  checked={isCardFrozen}
+                  onChange={(e) => handleFreezeToggle(e.target.checked)}
                 />
                 <span className="slider round"></span>
               </label>
@@ -138,11 +138,11 @@ const AccountsView = () => {
                 <span className="control-desc">Online e-ticaret harcamalarına izin ver.</span>
               </div>
               <label className="switch">
-                <input 
-                  type="checkbox" 
-                  checked={internetAllowed} 
+                <input
+                  type="checkbox"
+                  checked={internetAllowed}
                   disabled={isCardFrozen}
-                  onChange={(e) => handleSettingToggle('internetAllowed', e.target.checked, setInternetAllowed)} 
+                  onChange={(e) => handleSettingToggle('internetAllowed', e.target.checked, setInternetAllowed)}
                 />
                 <span className="slider round"></span>
               </label>
@@ -154,11 +154,11 @@ const AccountsView = () => {
                 <span className="control-desc">Yurt dışı pos ve sitelerde kullanımı açar.</span>
               </div>
               <label className="switch">
-                <input 
-                  type="checkbox" 
-                  checked={overseasAllowed} 
+                <input
+                  type="checkbox"
+                  checked={overseasAllowed}
                   disabled={isCardFrozen}
-                  onChange={(e) => handleSettingToggle('overseasAllowed', e.target.checked, setOverseasAllowed)} 
+                  onChange={(e) => handleSettingToggle('overseasAllowed', e.target.checked, setOverseasAllowed)}
                 />
                 <span className="slider round"></span>
               </label>
@@ -186,8 +186,8 @@ const AccountsView = () => {
                 </div>
                 <div className="acc-iban-wrapper">
                   <span className="acc-iban-text">{acc.iban}</span>
-                  <button 
-                    className="copy-iban-btn" 
+                  <button
+                    className="copy-iban-btn"
                     onClick={() => handleCopyIban(acc.iban, index)}
                   >
                     {copiedIndex === index ? '✓ Kopyalandı' : 'Kopyala'}

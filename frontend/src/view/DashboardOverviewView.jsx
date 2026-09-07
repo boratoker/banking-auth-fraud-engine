@@ -4,11 +4,7 @@ import { getOverviewData } from '../api/bankingApi';
 const DashboardOverviewView = ({ userName, onNavigate }) => {
   const [showBalances, setShowBalances] = useState(true);
   const [overview, setOverview] = useState({
-    totalBalance: 148250.75,
-    savingsBalance: 85000.00,
-    creditCardSpent: 28450.20,
-    creditCardLimit: 100000.00,
-    riskScore: 98,
+
     recentTransactions: [
       { id: 1, title: 'Migros Sanal Market', date: 'Bugün, 14:22', amount: -482.50, category: 'Alışveriş', risk: 'Safe', riskScore: '1%' },
       { id: 2, title: 'Gelen Transfer - Ahmet Yıl.', date: 'Bugün, 11:05', amount: 3500.00, category: 'FAST Transfer', risk: 'Safe', riskScore: '0%' },
@@ -22,7 +18,7 @@ const DashboardOverviewView = ({ userName, onNavigate }) => {
       .then(res => {
         if (res.data) setOverview(prev => ({ ...prev, ...res.data }));
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const formatCurrency = (val) => {
@@ -37,7 +33,7 @@ const DashboardOverviewView = ({ userName, onNavigate }) => {
           <h1>Hoş geldin, {userName || 'Değerli Müşterimiz'} 👋</h1>
           <p>Hesap durumunuz ve güvenlik özetiniz günceldir. Son oturum: İstanbul, Türkiye (Bu Cihaz)</p>
         </div>
-        <button 
+        <button
           className="toggle-balance-btn"
           onClick={() => setShowBalances(!showBalances)}
         >
