@@ -75,7 +75,7 @@ public class AuthController {
         }
 
         User user = userOpt.get();
-        String otp = generateAndSendOtp(email);
+        String otp = generateAndSendOtp(email, "login");
 
         return ResponseEntity.ok(Map.of(
                 "message", "OTP kodunuz " + maskEmail(email) + " adresine gönderildi.",
@@ -107,7 +107,7 @@ public class AuthController {
         userRepository.save(user);
 
         // E-posta doğrulama OTP'si gönder
-        String otp = generateAndSendOtp(email);
+        String otp = generateAndSendOtp(email, "register");
 
         return ResponseEntity.ok(Map.of(
                 "message", "Kayıt başarılı! Doğrulama kodu " + maskEmail(email) + " adresine gönderildi."
@@ -163,22 +163,23 @@ public class AuthController {
 
     // --- Yardımcı metodlar ---
 
-    private String generateAndSendOtp(String email) {
+    private String generateAndSendOtp(String email, String mode) {
         String otp = String.format("%06d", new Random().nextInt(999999));
+        long expiryTime = System.currentTimeMillis() + (2 * 60 * 1000); // 2 dakika
 
         try {
             if (redisTemplate != null) {
-                redisTemplate.opsForValue().set("OTP:" + email, otp, Duration.ofMinutes(3));
+                redisTemplate.opsForValue().set("OTP:" + email, otp, Duration.ofMinutes(2));
             } else {
-                otpFallbackMap.put(email, otp);
+                otpFallbackMap.put(email, otp + ":" + expiryTime);
             }
         } catch (Exception e) {
             log.warn("Redis kaydı başarısız, in-memory saklanıyor: {}", e.getMessage());
-            otpFallbackMap.put(email, otp);
+            otpFallbackMap.put(email, otp + ":" + expiryTime);
         }
 
         try {
-            emailService.sendOtpEmail(email, otp);
+            emailService.sendOtpEmail(email, otp, mode);
         } catch (Exception e) {
             log.warn("E-posta gönderimi uyarısı: {}", e.getMessage());
         }
@@ -196,7 +197,18 @@ public class AuthController {
         } catch (Exception e) {
             log.warn("Redis okuma hatası: {}", e.getMessage());
         }
-        return otpFallbackMap.get(email);
+
+        String raw = otpFallbackMap.get(email);
+        if (raw != null && raw.contains(":")) {
+            String[] parts = raw.split(":");
+            long expiry = Long.parseLong(parts[1]);
+            if (System.currentTimeMillis() <= expiry) {
+                return parts[0];
+            } else {
+                otpFallbackMap.remove(email); // Süresi dolmuş
+            }
+        }
+        return null;
     }
 
     private void clearStoredOtp(String email) {

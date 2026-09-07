@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { checkEmail, login, register, verifyOtp } from './api/authApi';
 import MainDashboardView from './view/MainDashboardView';
 import './App.css';
@@ -15,6 +15,25 @@ function App() {
   const [userName, setUserName] = useState('');
   const [otpMode, setOtpMode] = useState('login'); // 'login' | 'register'
   const [loading, setLoading] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(120); // 2 dakika (120 saniye)
+
+  useEffect(() => {
+    let timer;
+    if ((step === 'login-otp' || step === 'register-otp') && timeLeft > 0) {
+      timer = setInterval(() => {
+        setTimeLeft((prev) => prev - 1);
+      }, 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [step, timeLeft]);
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
   const maskEmail = (str) => {
     if (!str || !str.includes('@')) return str;
@@ -33,6 +52,7 @@ function App() {
     setError('');
     setUserName('');
     setOtpMode('login');
+    setTimeLeft(120);
   };
 
   // Step 1: E-posta kontrol
@@ -51,9 +71,12 @@ function App() {
         setMessage(loginRes.data.message);
         setUserName(loginRes.data.firstName || '');
         setOtpMode('login');
+        setTimeLeft(120);
+        setOtp('');
         setStep('login-otp');
       } else {
         // Kullanıcı yok → register formu
+        setMessage(`${email} adresi ile kayıtlı hesap bulunamadı. Lütfen ad ve soyadınızı girerek yeni hesap oluşturun.`);
         setStep('register');
       }
     } catch (err) {
@@ -77,7 +100,31 @@ function App() {
       const response = await register(email, firstName, lastName);
       setMessage(response.data.message);
       setOtpMode('register');
+      setTimeLeft(120);
+      setOtp('');
       setStep('register-otp');
+    } catch (err) {
+      setError(err.response?.data?.error || err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Resend OTP handler
+  const handleResendOtp = async () => {
+    setMessage('');
+    setError('');
+    setLoading(true);
+    try {
+      if (otpMode === 'login') {
+        const loginRes = await login(email);
+        setMessage(loginRes.data.message || 'Yeni doğrulama kodu gönderildi.');
+      } else {
+        const regRes = await register(email, firstName, lastName);
+        setMessage(regRes.data.message || 'Yeni doğrulama kodu gönderildi.');
+      }
+      setTimeLeft(120);
+      setOtp('');
     } catch (err) {
       setError(err.response?.data?.error || err.message);
     } finally {
@@ -88,6 +135,10 @@ function App() {
   // Step 3: OTP Doğrulama
   const handleOtpSubmit = async (e) => {
     e.preventDefault();
+    if (timeLeft === 0) {
+      setError('Kodun süresi doldu! Lütfen "Kodu Tekrar Gönder" butonuna tıklayarak yeni bir kod isteyiniz.');
+      return;
+    }
     setMessage('');
     setError('');
     setLoading(true);
@@ -149,12 +200,21 @@ function App() {
           <form className="login-form" onSubmit={handleOtpSubmit}>
             <div className="form-group">
               <label className="form-label" htmlFor="otp">
-                6 Haneli Doğrulama Kodu
+                6 Haneli Giriş Doğrulama Kodu
               </label>
               <p style={{ fontSize: '13px', color: 'var(--text)', margin: '0 0 10px 0' }}>
                 Hoş geldiniz{userName ? `, ${userName}` : ''}!<br />
                 <strong>{maskEmail(email)}</strong> adresine gönderilen kodu giriniz.
               </p>
+              
+              <div className={`timer-badge ${timeLeft === 0 ? 'expired' : ''}`}>
+                {timeLeft > 0 ? (
+                  <>⏱ Kalan Süre: <strong>{formatTime(timeLeft)}</strong></>
+                ) : (
+                  <>⚠️ Kodun süresi doldu (2 dk). Lütfen yeni kod isteyin.</>
+                )}
+              </div>
+
               <input
                 id="otp"
                 type="text"
@@ -164,12 +224,19 @@ function App() {
                 onChange={(e) => setOtp(e.target.value)}
                 required
                 maxLength="6"
+                disabled={timeLeft === 0}
                 autoFocus
               />
             </div>
-            <button type="submit" className="btn btn-success" disabled={loading}>
+
+            <button type="submit" className="btn btn-success" disabled={loading || timeLeft === 0}>
               {loading ? 'Doğrulanıyor...' : 'Giriş Yap'}
             </button>
+
+            <button type="button" className="btn btn-outline" onClick={handleResendOtp} disabled={loading}>
+              Kodu Tekrar Gönder
+            </button>
+
             <button type="button" className="btn btn-secondary" onClick={resetForm}>
               Geri Dön
             </button>
@@ -221,11 +288,20 @@ function App() {
           <form className="login-form" onSubmit={handleOtpSubmit}>
             <div className="form-group">
               <label className="form-label" htmlFor="otp-register">
-                E-posta Doğrulama Kodu
+                6 Haneli Kayıt Doğrulama Kodu
               </label>
               <p style={{ fontSize: '13px', color: 'var(--text)', margin: '0 0 10px 0' }}>
-                <strong>{maskEmail(email)}</strong> adresine gönderilen 6 haneli doğrulama kodunu giriniz.
+                <strong>{maskEmail(email)}</strong> adresine gönderilen doğrulama kodunu giriniz.
               </p>
+
+              <div className={`timer-badge ${timeLeft === 0 ? 'expired' : ''}`}>
+                {timeLeft > 0 ? (
+                  <>⏱ Kalan Süre: <strong>{formatTime(timeLeft)}</strong></>
+                ) : (
+                  <>⚠️ Kodun süresi doldu (2 dk). Lütfen yeni kod isteyin.</>
+                )}
+              </div>
+
               <input
                 id="otp-register"
                 type="text"
@@ -235,12 +311,19 @@ function App() {
                 onChange={(e) => setOtp(e.target.value)}
                 required
                 maxLength="6"
+                disabled={timeLeft === 0}
                 autoFocus
               />
             </div>
-            <button type="submit" className="btn btn-success" disabled={loading}>
+
+            <button type="submit" className="btn btn-success" disabled={loading || timeLeft === 0}>
               {loading ? 'Doğrulanıyor...' : 'Doğrula ve Kayıt Tamamla'}
             </button>
+
+            <button type="button" className="btn btn-outline" onClick={handleResendOtp} disabled={loading}>
+              Kodu Tekrar Gönder
+            </button>
+
             <button type="button" className="btn btn-secondary" onClick={resetForm}>
               Geri Dön
             </button>

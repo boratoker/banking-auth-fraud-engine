@@ -11,7 +11,7 @@ spring:
       - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
       - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:h2:mem:bankingdb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL}
+    url: ${SPRING_DATASOURCE_URL:jdbc:h2:file:./data/bankingdb;DB_CLOSE_DELAY=-1;AUTO_SERVER=TRUE;MODE=PostgreSQL}
     username: sa
     password: sa
     driver-class-name: ${SPRING_DATASOURCE_DRIVER:org.h2.Driver}
@@ -38,8 +38,8 @@ spring:
   mail:
     host: smtp.gmail.com
     port: 587
-    username: ${MAIL_USERNAME:}
-    password: ${MAIL_PASSWORD:}
+    username: ${MAIL_USERNAME:toker2003@gmail.com}
+    password: ${MAIL_PASSWORD:legrfmmkjlxvvlmc}
     properties:
       mail:
         smtp:
