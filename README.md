@@ -63,39 +63,6 @@ Proje, bağımsız ölçeklenebilir mikroservisler, olay tabanlı (event-driven)
 
 ## 📦 Proje Bağımlılık Haritası & Tabloları
 
-### 📊 Bağımlılık Ağacı (Mermaid Diagram)
-
-```mermaid
-graph TD
-    subgraph Frontend ["🎨 Frontend (React 18 + Vite)"]
-        React["react v18.3.1"]
-        ReactDOM["react-dom v18.3.1"]
-        Axios["axios v1.7.9"]
-        Vite["vite v8.2.2 (Dev)"]
-    end
-
-    subgraph Backend ["⚙️ Backend (Spring Boot 3.2.3)"]
-        Web["spring-boot-starter-web"]
-        JPA["spring-boot-starter-data-jpa"]
-        PostgresDriver["postgresql (Driver 15)"]
-        Redis["spring-boot-starter-data-redis"]
-        AMQP["spring-boot-starter-amqp (RabbitMQ)"]
-        Kafka["spring-kafka"]
-        Mail["spring-boot-starter-mail (JavaMailSender)"]
-        Actuator["spring-boot-starter-actuator"]
-        Prometheus["micrometer-registry-prometheus"]
-        H2["h2 (Development Fallback)"]
-    end
-
-    Frontend -->|HTTP / REST API| Web
-    Web --> JPA --> PostgresDriver
-    Web --> Redis
-    Web --> AMQP
-    Web --> Kafka
-    Web --> Mail
-    Web --> Actuator --> Prometheus
-```
-
 ---
 
 ### 🔹 Backend Bağımlılıkları
