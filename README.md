@@ -61,7 +61,7 @@ Proje, bağımsız ölçeklenebilir mikroservisler, olay tabanlı (event-driven)
 
 ---
 
-## 📦 Proje Bağımlılık Tablosu
+## 📦 Proje Bağımlılık Tablolari
 
 ---
 
