@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { checkEmail, login, register, verifyOtp } from './api/authApi';
+import MainDashboardView from './view/MainDashboardView';
 import './App.css';
 
 function App() {
@@ -101,6 +102,16 @@ function App() {
       setLoading(false);
     }
   };
+
+  if (step === 'success') {
+    return (
+      <MainDashboardView 
+        userName={userName} 
+        email={email} 
+        onLogout={resetForm} 
+      />
+    );
+  }
 
   return (
     <div className="login-container">
@@ -234,19 +245,6 @@ function App() {
               Geri Dön
             </button>
           </form>
-        )}
-
-        {/* Success */}
-        {step === 'success' && (
-          <div className="login-form">
-            <div style={{ fontSize: '48px', marginBottom: '16px' }}>✅</div>
-            <p style={{ fontSize: '15px', color: 'var(--text)', margin: '0 0 20px 0' }}>
-              {userName && <strong>Hoş geldiniz, {userName}!</strong>}
-            </p>
-            <button type="button" className="btn btn-secondary" onClick={resetForm}>
-              Çıkış Yap
-            </button>
-          </div>
         )}
       </div>
     </div>

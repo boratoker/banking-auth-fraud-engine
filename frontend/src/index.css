@@ -65,13 +65,10 @@ textarea {
 
 #root {
   width: 100%;
-  min-height: 100svh;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  align-items: center;
   box-sizing: border-box;
-  padding: 24px 16px;
 }
 
 h1,
