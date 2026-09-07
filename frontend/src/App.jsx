@@ -105,10 +105,10 @@ function App() {
 
   if (step === 'success') {
     return (
-      <MainDashboardView 
-        userName={userName} 
-        email={email} 
-        onLogout={resetForm} 
+      <MainDashboardView
+        userName={userName}
+        email={email}
+        onLogout={resetForm}
       />
     );
   }
@@ -116,7 +116,7 @@ function App() {
   return (
     <div className="login-container">
       <div className="login-card">
-        <h2 className="login-title">Banking Digital Login</h2>
+        <h2 className="login-title">Tokerbank Digital Login</h2>
 
         {message && <div className="alert-message success">{message}</div>}
         {error && <div className="alert-message error">{error}</div>}
