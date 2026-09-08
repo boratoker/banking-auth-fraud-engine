@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, SafeAreaView, StatusBar, StyleSheet } from 'react-native';
+import { View, StatusBar, StyleSheet } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import AuthScreen from './src/screens/AuthScreen';
 import DashboardOverviewScreen from './src/screens/DashboardOverviewScreen';
 import AccountsScreen from './src/screens/AccountsScreen';
@@ -21,30 +22,34 @@ export default function App() {
 
   if (!user) {
     return (
-      <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={colors.background} />
-        <AuthScreen onAuthSuccess={setUser} />
-      </SafeAreaView>
+      <SafeAreaProvider>
+        <SafeAreaView style={styles.container}>
+          <StatusBar barStyle="light-content" backgroundColor={colors.background} />
+          <AuthScreen onAuthSuccess={setUser} />
+        </SafeAreaView>
+      </SafeAreaProvider>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.background} />
-      <Header userName={user.userName} email={user.email} onLogout={handleLogout} />
+    <SafeAreaProvider>
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={colors.background} />
+        <Header userName={user.userName} email={user.email} onLogout={handleLogout} />
 
-      <View style={styles.screenContainer}>
-        {activeTab === 'overview' && (
-          <DashboardOverviewScreen onNavigate={setActiveTab} />
-        )}
-        {activeTab === 'accounts' && <AccountsScreen />}
-        {activeTab === 'transfer' && <TransferScreen />}
-        {activeTab === 'transactions' && <TransactionsScreen />}
-        {activeTab === 'security' && <SecurityScreen />}
-      </View>
+        <View style={styles.screenContainer}>
+          {activeTab === 'overview' && (
+            <DashboardOverviewScreen onNavigate={setActiveTab} />
+          )}
+          {activeTab === 'accounts' && <AccountsScreen />}
+          {activeTab === 'transfer' && <TransferScreen />}
+          {activeTab === 'transactions' && <TransactionsScreen />}
+          {activeTab === 'security' && <SecurityScreen />}
+        </View>
 
-      <BottomNav activeTab={activeTab} onSelectTab={setActiveTab} />
-    </SafeAreaView>
+        <BottomNav activeTab={activeTab} onSelectTab={setActiveTab} />
+      </SafeAreaView>
+    </SafeAreaProvider>
   );
 }
 
