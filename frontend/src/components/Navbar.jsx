@@ -1,4 +1,5 @@
 import React from 'react';
+import tokerbankLogo from '../assets/tokerbank-logo.png';
 
 const Navbar = ({ userName, email, onLogout, userRiskScore = 98 }) => {
   const maskEmail = (str) => {
@@ -11,7 +12,7 @@ const Navbar = ({ userName, email, onLogout, userRiskScore = 98 }) => {
   return (
     <header className="dashboard-navbar">
       <div className="navbar-brand">
-        <div className="brand-icon">🛡️</div>
+        <img src={tokerbankLogo} alt="TokerBank Logo" style={{ width: '36px', height: '36px', objectFit: 'contain' }} />
         <div className="brand-text">
           <span className="brand-title">TokerBank</span>
           <span className="brand-subtitle">Auth & Fraud Shield</span>

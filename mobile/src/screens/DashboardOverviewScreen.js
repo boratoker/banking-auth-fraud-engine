@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { getOverviewData } from '../api/bankingApi';
 import { colors } from '../theme/colors';
@@ -81,7 +82,10 @@ const DashboardOverviewScreen = ({ onNavigate }) => {
           onPress={() => onNavigate('security')}
           activeOpacity={0.8}
         >
-          <Text style={styles.actionIcon}>🛡️</Text>
+          <Image
+            source={require('../assets/tokerbank logo.png')}
+            style={{ width: 22, height: 22, resizeMode: 'contain', marginBottom: 4 }}
+          />
           <Text style={styles.actionLabel}>Güvenlik</Text>
         </TouchableOpacity>
       </View>

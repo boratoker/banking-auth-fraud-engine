@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getOverviewData } from '../api/bankingApi';
+import tokerbankLogo from '../assets/tokerbank-logo.png';
 
 const DashboardOverviewView = ({ userName, onNavigate }) => {
   const [showBalances, setShowBalances] = useState(true);
@@ -93,7 +94,7 @@ const DashboardOverviewView = ({ userName, onNavigate }) => {
         <div className="widget-card fraud-widget">
           <div className="widget-header">
             <div className="widget-title">
-              <span className="widget-icon">🛡️</span>
+              <img src={tokerbankLogo} alt="Logo" style={{ width: '20px', height: '20px', objectFit: 'contain', marginRight: '6px' }} />
               <h3>AI Fraud Shield & Güvenlik Analizi</h3>
             </div>
             <span className="live-pill">CANLI İZLEME</span>
@@ -199,8 +200,8 @@ const DashboardOverviewView = ({ userName, onNavigate }) => {
                   <td><span className="tx-category">{tx.category}</span></td>
                   <td><span className="tx-date">{tx.date}</span></td>
                   <td>
-                    <span className="risk-tag safe">
-                      🛡️ %{tx.riskScore} Risk (Güvenli)
+                    <span className="risk-tag safe" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      <img src={tokerbankLogo} alt="Logo" style={{ width: '14px', height: '14px', objectFit: 'contain' }} /> %{tx.riskScore} Risk (Güvenli)
                     </span>
                   </td>
                   <td className={`text-right tx-amount ${tx.amount > 0 ? 'income' : 'expense'}`}>

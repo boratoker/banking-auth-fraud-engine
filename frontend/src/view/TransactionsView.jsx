@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getTransactions } from '../api/bankingApi';
+import tokerbankLogo from '../assets/tokerbank-logo.png';
 
 const TransactionsView = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -136,7 +137,12 @@ const TransactionsView = () => {
                     <td><span className="tx-date">{tx.date}</span></td>
                     <td>
                       <span className={`risk-tag ${tx.risk === 'Safe' ? 'safe' : 'flagged'}`}>
-                        {tx.risk === 'Safe' ? `🛡️ %${tx.riskScore} Risk` : `⚠️ %${tx.riskScore} Yüksek Risk`}
+                        {tx.risk === 'Safe' ? (
+                          <>
+                            <img src={tokerbankLogo} alt="Logo" style={{ width: 14, height: 14, objectFit: 'contain', verticalAlign: 'middle', marginRight: 4 }} />
+                            %{tx.riskScore} Risk
+                          </>
+                        ) : `⚠️ %${tx.riskScore} Yüksek Risk`}
                       </span>
                     </td>
                     <td>

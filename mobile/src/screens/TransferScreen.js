@@ -8,6 +8,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
+  Image,
 } from 'react-native';
 import { submitTransfer, verifyTransferOtp } from '../api/bankingApi';
 import FraudModal from '../components/FraudModal';
@@ -253,7 +254,10 @@ const TransferScreen = () => {
 
       {/* AI Protection Box */}
       <View style={styles.shieldCard}>
-        <Text style={styles.shieldHeader}>🛡️ Toker AI Fraud Protection</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+          <Image source={require('../assets/tokerbank logo.png')} style={{ width: 16, height: 16, resizeMode: 'contain', marginRight: 6 }} />
+          <Text style={styles.shieldHeader}>Toker AI Fraud Protection</Text>
+        </View>
         <Text style={styles.shieldText}>
           Tüm FAST transferler davranışsal biyometri, cihaz parmak izi ve yapay zeka skoru ile taranır.
         </Text>

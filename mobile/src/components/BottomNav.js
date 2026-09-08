@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { colors } from '../theme/colors';
 
 const tabs = [
@@ -7,7 +7,7 @@ const tabs = [
   { key: 'accounts', label: 'Hesap/Kart', icon: '💳' },
   { key: 'transfer', label: 'Transfer', icon: '💸' },
   { key: 'transactions', label: 'İşlemler', icon: '📜' },
-  { key: 'security', label: 'Güvenlik', icon: '🛡️' },
+  { key: 'security', label: 'Güvenlik', isLogo: true },
 ];
 
 const BottomNav = ({ activeTab, onSelectTab }) => {
@@ -22,7 +22,14 @@ const BottomNav = ({ activeTab, onSelectTab }) => {
             onPress={() => onSelectTab(tab.key)}
             activeOpacity={0.7}
           >
-            <Text style={styles.tabIcon}>{tab.icon}</Text>
+            {tab.isLogo ? (
+              <Image
+                source={require('../assets/tokerbank logo.png')}
+                style={{ width: 18, height: 18, resizeMode: 'contain', marginBottom: 2 }}
+              />
+            ) : (
+              <Text style={styles.tabIcon}>{tab.icon}</Text>
+            )}
             <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
               {tab.label}
             </Text>

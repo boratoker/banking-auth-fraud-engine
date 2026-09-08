@@ -1,4 +1,5 @@
 import React from 'react';
+import tokerbankLogo from '../assets/tokerbank-logo.png';
 
 const Sidebar = ({ activeTab, setActiveTab }) => {
   const menuItems = [
@@ -27,7 +28,7 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
 
       <div className="sidebar-footer-card">
         <div className="footer-card-header">
-          <span className="shield-icon">🛡️</span>
+          <img src={tokerbankLogo} alt="Logo" style={{ width: '18px', height: '18px', objectFit: 'contain' }} />
           <span>Fraud Engine v2.4</span>
         </div>
         <p className="footer-card-desc">

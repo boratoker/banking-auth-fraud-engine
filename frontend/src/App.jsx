@@ -19,22 +19,41 @@ const calcPasswordStrength = (pwd) => {
 
 // Toast component
 const FailedLoginToast = ({ info, onDismiss }) => {
-  useEffect(() => {
-    if (!info) return;
-    const t = setTimeout(onDismiss, 5000);
-    return () => clearTimeout(t);
-  }, [info, onDismiss]);
+  const [visible, setVisible] = useState(false);
+  const [renderInfo, setRenderInfo] = useState(null);
 
-  if (!info) return null;
+  useEffect(() => {
+    if (info) {
+      setRenderInfo(info);
+      const raf = requestAnimationFrame(() => {
+        setVisible(true);
+      });
+      const t = setTimeout(() => handleClose(), 5000);
+      return () => {
+        cancelAnimationFrame(raf);
+        clearTimeout(t);
+      };
+    }
+  }, [info]);
+
+  const handleClose = () => {
+    setVisible(false);
+    setTimeout(() => {
+      onDismiss();
+      setRenderInfo(null);
+    }, 400);
+  };
+
+  if (!renderInfo && !visible) return null;
 
   return (
-    <div className="toast-popup toast-popup--visible">
+    <div className={`toast-popup ${visible ? 'toast-popup--visible' : ''}`}>
       <span className="toast-icon">⚠️</span>
       <div>
         <strong>Başarısız giriş denemesi tespit edildi</strong>
-        <p>Son başarısız deneme: <strong>{info}</strong></p>
+        <p>Son başarısız deneme: <strong>{renderInfo || info}</strong></p>
       </div>
-      <button className="toast-close" onClick={onDismiss}>✕</button>
+      <button className="toast-close" onClick={handleClose}>✕</button>
     </div>
   );
 };

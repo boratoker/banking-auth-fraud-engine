@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { submitTransfer, verifyTransferOtp } from '../api/bankingApi';
+import tokerbankLogo from '../assets/tokerbank-logo.png';
 
 const TransferView = () => {
   const [recipientIban, setRecipientIban] = useState('');
@@ -237,7 +238,7 @@ const TransferView = () => {
 
           <div className="widget-card fraud-shield-info-box">
             <div className="shield-header">
-              <span className="shield-icon">🛡️</span>
+              <img src={tokerbankLogo} alt="Logo" style={{ width: 22, height: 22, objectFit: 'contain', marginRight: 8 }} />
               <h4>Toker AI Fraud Protection</h4>
             </div>
             <p>

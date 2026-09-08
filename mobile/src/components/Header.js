@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { colors } from '../theme/colors';
 
 const Header = ({ userName, email, onLogout }) => {
@@ -7,7 +7,10 @@ const Header = ({ userName, email, onLogout }) => {
     <View style={styles.headerContainer}>
       <View style={styles.branding}>
         <View style={styles.logoBadge}>
-          <Text style={styles.logoText}>🛡️ TB</Text>
+          <Image
+            source={require('../assets/tokerbank logo.png')}
+            style={{ width: 26, height: 26, resizeMode: 'contain' }}
+          />
         </View>
         <View>
           <Text style={styles.brandTitle}>TokerBank</Text>

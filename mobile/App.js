@@ -16,37 +16,52 @@ import { StatusBar } from 'react-native';
 const FailedLoginToast = ({ info, onDismiss }) => {
   const slideAnim = useRef(new Animated.Value(120)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.9)).current;
+  const [currentInfo, setCurrentInfo] = useState(null);
 
   useEffect(() => {
-    if (!info) return;
-    // Slide up
-    Animated.parallel([
-      Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, tension: 80, friction: 10 }),
-      Animated.timing(opacityAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
-    ]).start();
-    // Auto dismiss after 5s
-    const t = setTimeout(() => dismiss(), 5000);
-    return () => clearTimeout(t);
+    if (info) {
+      setCurrentInfo(info);
+      slideAnim.setValue(120);
+      opacityAnim.setValue(0);
+      scaleAnim.setValue(0.9);
+
+      Animated.parallel([
+        Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, tension: 70, friction: 8 }),
+        Animated.timing(opacityAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
+        Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, tension: 70, friction: 8 }),
+      ]).start();
+
+      const t = setTimeout(() => dismiss(), 5000);
+      return () => clearTimeout(t);
+    }
   }, [info]);
 
   const dismiss = () => {
     Animated.parallel([
       Animated.timing(slideAnim, { toValue: 120, duration: 250, useNativeDriver: true }),
-      Animated.timing(opacityAnim, { toValue: 0, duration: 250, useNativeDriver: true }),
-    ]).start(() => onDismiss());
+      Animated.timing(opacityAnim, { toValue: 0, duration: 200, useNativeDriver: true }),
+      Animated.timing(scaleAnim, { toValue: 0.9, duration: 200, useNativeDriver: true }),
+    ]).start(() => {
+      onDismiss();
+      setCurrentInfo(null);
+    });
   };
 
-  if (!info) return null;
+  if (!currentInfo && !info) return null;
 
   return (
     <Animated.View style={[
       styles.toast,
-      { transform: [{ translateY: slideAnim }], opacity: opacityAnim }
+      {
+        transform: [{ translateY: slideAnim }, { scale: scaleAnim }],
+        opacity: opacityAnim,
+      }
     ]}>
       <Text style={styles.toastIcon}>⚠️</Text>
       <View style={styles.toastContent}>
         <Text style={styles.toastTitle}>Başarısız giriş denemesi tespit edildi</Text>
-        <Text style={styles.toastBody}>Son başarısız deneme: <Text style={{ fontWeight: 'bold' }}>{info}</Text></Text>
+        <Text style={styles.toastBody}>Son başarısız deneme: <Text style={{ fontWeight: 'bold' }}>{currentInfo || info}</Text></Text>
       </View>
       <TouchableOpacity onPress={dismiss} style={styles.toastClose}>
         <Text style={{ color: colors.textMuted, fontSize: 16 }}>✕</Text>
