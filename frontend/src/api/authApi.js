@@ -11,8 +11,12 @@ export const login = async (email) => {
     return await axios.post(`${API_BASE_URL}/login`, { email });
 };
 
-export const register = async (email, firstName, lastName) => {
-    return await axios.post(`${API_BASE_URL}/register`, { email, firstName, lastName });
+export const verifyPassword = async (email, password) => {
+    return await axios.post(`${API_BASE_URL}/verify-password`, { email, password });
+};
+
+export const register = async (email, firstName, lastName, password) => {
+    return await axios.post(`${API_BASE_URL}/register`, { email, firstName, lastName, password });
 };
 
 export const verifyOtp = async (email, otp, mode) => {

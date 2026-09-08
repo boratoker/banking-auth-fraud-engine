@@ -37,6 +37,62 @@ Proje, bağımsız ölçeklenebilir mikroservisler, olay tabanlı (event-driven)
 
 ---
 
+## 🔗 Servis Adresleri ve Bağlantı Linkleri
+
+### 🌐 Frontend Uygulamaları
+
+| Servis | Adres / Link | Varsayılan Port | Açıklama |
+| :--- | :--- | :--- | :--- |
+| **Web Frontend** (React + Vite) | [http://localhost:5173](http://localhost:5173) | `5173` | Dijital bankacılık web kullanıcı arayüzü |
+| **Mobile Frontend** (Expo Dev Server) | [http://localhost:8081](http://localhost:8081) | `8081` | Expo Metro Bundler & QR kod ile Expo Go mobil bağlantısı |
+| **Mobile Web Simulator** | [http://localhost:5174](http://localhost:5174) | `5174` | Mobil arayüzün tarayıcı simülasyonu (`npm run web`) |
+
+---
+
+### ⚙️ Backend Servisleri
+
+| Servis | Adres / Link | Port | Açıklama |
+| :--- | :--- | :--- | :--- |
+| **API Gateway** | [http://localhost:8080](http://localhost:8080) | `8080` | Bütün frontend isteklerinin girdiği ana kapı (Routing, CORS & Rate Limiter) |
+| **Auth & Banking Service** | [http://localhost:8081](http://localhost:8081) | `8081` | Kimlik doğrulama (şifre + OTP), kullanıcı ve bankacılık işlemleri |
+| **Fraud Service** | [http://localhost:8082](http://localhost:8082) | `8082` | AI tabanlı şüpheli işlem ve dolandırıcılık tespit servisi |
+
+#### 📌 Temel API Endpoint'leri (Gateway üzerinden):
+- **Auth Servisi:**
+  - `POST` `http://localhost:8080/api/v1/auth/check-email` — E-posta kontrolü
+  - `POST` `http://localhost:8080/api/v1/auth/verify-password` — Şifre doğrulama
+  - `POST` `http://localhost:8080/api/v1/auth/login` — Giriş & OTP tetikleme
+  - `POST` `http://localhost:8080/api/v1/auth/register` — Yeni kullanıcı kaydı
+  - `POST` `http://localhost:8080/api/v1/auth/verify-otp` — 2FA OTP doğrulama
+- **Bankacılık Servisi:**
+  - `GET` `http://localhost:8080/api/v1/banking/overview` — Genel hesap durumu
+  - `GET` `http://localhost:8080/api/v1/banking/accounts` — Hesap listesi
+  - `GET` `http://localhost:8080/api/v1/banking/cards` — Kartlar & Güvenlik ayarları
+  - `POST` `http://localhost:8080/api/v1/banking/transfers` — Para transferi & Fraud kontrolü
+
+---
+
+### 📊 İzleme ve Yönetim Panelleri (Docker)
+
+| Servis | Adres / Link | Giriş Bilgileri | Açıklama |
+| :--- | :--- | :--- | :--- |
+| **Grafana Dashboard** | [http://localhost:3000](http://localhost:3000) | `admin` / `admin` | Sistem metrikleri ve görselleştirme |
+| **Prometheus UI** | [http://localhost:9090](http://localhost:9090) | Giriş gerekmez | Ham metrik toplayıcı |
+| **RabbitMQ Management** | [http://localhost:15672](http://localhost:15672) | `guest` / `guest` | Mesaj kuyrukları ve bildirim yönetimi |
+| **Gateway Health Check** | [http://localhost:8080/actuator/health](http://localhost:8080/actuator/health) | - | Gateway sağlık durumu |
+| **Auth Service Health Check** | [http://localhost:8081/actuator/health](http://localhost:8081/actuator/health) | - | Auth mikroservisi sağlık durumu |
+
+---
+
+### 🗄️ Veritabanı ve Mesajlaşma Bağlantı Portları
+
+- **PostgreSQL**: `localhost:5432` (`banking_auth` veritabanı, kullanıcı: `banking`)
+- **Redis**: `localhost:6379` (Önbellek, Oturum ve OTP saklama)
+- **Apache Kafka**: `localhost:9092` (Zookeeper: `localhost:2181`)
+- **RabbitMQ (AMQP)**: `localhost:5672`
+
+---
+
 ## 🚀 Kullanılan Diller ve Teknolojiler
 
 ### 🖥️ Backend (Mikroservisler)

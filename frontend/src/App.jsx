@@ -1,332 +1,384 @@
-import React, { useState, useEffect } from 'react';
-import { checkEmail, login, register, verifyOtp } from './api/authApi';
+import React, { useState, useEffect, useRef } from 'react';
+import { checkEmail, login, verifyPassword, register, verifyOtp } from './api/authApi';
 import MainDashboardView from './view/MainDashboardView';
 import './App.css';
 
+// Şifre güç ölçer hesaplama
+const calcPasswordStrength = (pwd) => {
+  let score = 0;
+  const rules = {
+    length: pwd.length >= 8,
+    uppercase: /[A-Z]/.test(pwd),
+    number: /[0-9]/.test(pwd),
+    special: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pwd),
+  };
+  score = Object.values(rules).filter(Boolean).length;
+  return { score, rules };
+};
+
+// Toast component
+const FailedLoginToast = ({ info, onDismiss }) => {
+  useEffect(() => {
+    if (!info) return;
+    const t = setTimeout(onDismiss, 5000);
+    return () => clearTimeout(t);
+  }, [info, onDismiss]);
+
+  if (!info) return null;
+
+  return (
+    <div className="toast-popup toast-popup--visible">
+      <span className="toast-icon">⚠️</span>
+      <div>
+        <strong>Başarısız giriş denemesi tespit edildi</strong>
+        <p>Son başarısız deneme: <strong>{info}</strong></p>
+      </div>
+      <button className="toast-close" onClick={onDismiss}>✕</button>
+    </div>
+  );
+};
+
 function App() {
-  // Steps: 'email' → 'login-otp' | 'register' → 'register-otp' → 'success'
+  // Steps: 'email' → 'login-password' → 'login-otp' | 'register' → 'register-otp' → 'success'
   const [step, setStep] = useState('email');
   const [email, setEmail] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [otp, setOtp] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [userName, setUserName] = useState('');
-  const [otpMode, setOtpMode] = useState('login'); // 'login' | 'register'
+  const [otpMode, setOtpMode] = useState('login');
   const [loading, setLoading] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(120); // 2 dakika (120 saniye)
+  const [timeLeft, setTimeLeft] = useState(120);
+  const [failedLoginInfo, setFailedLoginInfo] = useState(null);
+
+  const { score: pwdScore, rules: pwdRules } = calcPasswordStrength(password);
+  const pwdStrengthLabel = ['', 'Çok Zayıf', 'Zayıf', 'Orta', 'Güçlü'][pwdScore] || '';
+  const pwdStrengthColor = ['', '#ff4444', '#ff9100', '#ffcc00', '#00e676'][pwdScore] || '';
+  const isPasswordValid = pwdRules.length && pwdRules.uppercase && pwdRules.number && pwdRules.special;
 
   useEffect(() => {
     let timer;
     if ((step === 'login-otp' || step === 'register-otp') && timeLeft > 0) {
-      timer = setInterval(() => {
-        setTimeLeft((prev) => prev - 1);
-      }, 1000);
+      timer = setInterval(() => setTimeLeft((p) => p - 1), 1000);
     }
-    return () => {
-      if (timer) clearInterval(timer);
-    };
+    return () => { if (timer) clearInterval(timer); };
   }, [step, timeLeft]);
 
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
+  const formatTime = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 
   const maskEmail = (str) => {
-    if (!str || !str.includes('@')) return str;
-    const [user, domain] = str.split('@');
-    const maskedUser = user.length > 2 ? user.slice(0, 2) + '***' : user + '***';
-    return `${maskedUser}@${domain}`;
+    if (!str?.includes('@')) return str;
+    const [u, d] = str.split('@');
+    return `${u.length > 2 ? u.slice(0, 2) + '***' : u + '***'}@${d}`;
   };
 
   const resetForm = () => {
-    setStep('email');
-    setEmail('');
-    setFirstName('');
-    setLastName('');
-    setOtp('');
-    setMessage('');
-    setError('');
-    setUserName('');
-    setOtpMode('login');
-    setTimeLeft(120);
+    setStep('email'); setEmail(''); setFirstName(''); setLastName('');
+    setPassword(''); setConfirmPassword(''); setOtp('');
+    setMessage(''); setError(''); setUserName(''); setOtpMode('login'); setTimeLeft(120);
   };
 
   // Step 1: E-posta kontrol
   const handleCheckEmail = async (e) => {
     e.preventDefault();
-    setMessage('');
-    setError('');
-    setLoading(true);
+    setMessage(''); setError(''); setLoading(true);
     try {
-      const response = await checkEmail(email);
-      const { exists } = response.data;
-
-      if (exists) {
-        // Kullanıcı var → login OTP gönder
+      const res = await checkEmail(email);
+      if (res.data.exists) {
         const loginRes = await login(email);
-        setMessage(loginRes.data.message);
-        setUserName(loginRes.data.firstName || '');
-        setOtpMode('login');
-        setTimeLeft(120);
-        setOtp('');
-        setStep('login-otp');
+        if (loginRes.data.requiresPassword) {
+          setUserName(loginRes.data.firstName || '');
+          setStep('login-password');
+        }
       } else {
-        // Kullanıcı yok → register formu
-        setMessage(`${email} adresi ile kayıtlı hesap bulunamadı. Lütfen ad ve soyadınızı girerek yeni hesap oluşturun.`);
+        setMessage(`${email} adresi ile kayıtlı hesap bulunamadı. Yeni hesap oluşturun.`);
         setStep('register');
       }
     } catch (err) {
-      if (err.response?.status === 429) {
-        setError('Çok fazla istek! Lütfen biraz bekleyin.');
-      } else {
-        setError(err.response?.data?.error || err.message);
-      }
-    } finally {
-      setLoading(false);
-    }
+      setError(err.response?.status === 429
+        ? 'Çok fazla istek! Lütfen bekleyin.'
+        : err.response?.data?.error || err.message);
+    } finally { setLoading(false); }
   };
 
-  // Step 2b: Register → OTP gönder
+  // Step 2a: Şifre doğrulama
+  const handleVerifyPassword = async (e) => {
+    e.preventDefault();
+    setMessage(''); setError(''); setLoading(true);
+    try {
+      const res = await verifyPassword(email, password);
+      setMessage(res.data.message);
+      setUserName(res.data.firstName || '');
+      if (res.data.lastFailedLoginAt) {
+        setFailedLoginInfo(res.data.lastFailedLoginAt);
+      }
+      setOtpMode('login');
+      setTimeLeft(120);
+      setOtp('');
+      setPassword('');
+      setStep('login-otp');
+    } catch (err) {
+      setError(err.response?.data?.error || 'Şifre doğrulanamadı.');
+    } finally { setLoading(false); }
+  };
+
+  // Step 2b: Register
   const handleRegister = async (e) => {
     e.preventDefault();
-    setMessage('');
-    setError('');
-    setLoading(true);
+    if (!isPasswordValid) { setError('Şifre tüm güvenlik kurallarını karşılamalıdır.'); return; }
+    if (password !== confirmPassword) { setError('Şifreler eşleşmiyor.'); return; }
+    setMessage(''); setError(''); setLoading(true);
     try {
-      const response = await register(email, firstName, lastName);
-      setMessage(response.data.message);
+      const res = await register(email, firstName, lastName, password);
+      setMessage(res.data.message);
       setOtpMode('register');
       setTimeLeft(120);
       setOtp('');
+      setPassword('');
       setStep('register-otp');
     } catch (err) {
       setError(err.response?.data?.error || err.message);
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
-  // Resend OTP handler
+  // Resend OTP
   const handleResendOtp = async () => {
-    setMessage('');
-    setError('');
-    setLoading(true);
+    setMessage(''); setError(''); setLoading(true);
     try {
       if (otpMode === 'login') {
-        const loginRes = await login(email);
-        setMessage(loginRes.data.message || 'Yeni doğrulama kodu gönderildi.');
+        const res = await verifyPassword(email, ''); // Will fail — use direct login resend
+        setMessage(res.data.message || 'Yeni kod gönderildi.');
       } else {
-        const regRes = await register(email, firstName, lastName);
-        setMessage(regRes.data.message || 'Yeni doğrulama kodu gönderildi.');
+        const res = await register(email, firstName, lastName, password);
+        setMessage(res.data.message || 'Yeni kod gönderildi.');
       }
-      setTimeLeft(120);
-      setOtp('');
+      setTimeLeft(120); setOtp('');
     } catch (err) {
       setError(err.response?.data?.error || err.message);
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
-  // Step 3: OTP Doğrulama
+  // Step 3: OTP doğrulama
   const handleOtpSubmit = async (e) => {
     e.preventDefault();
-    if (timeLeft === 0) {
-      setError('Kodun süresi doldu! Lütfen "Kodu Tekrar Gönder" butonuna tıklayarak yeni bir kod isteyiniz.');
-      return;
-    }
-    setMessage('');
-    setError('');
-    setLoading(true);
+    if (timeLeft === 0) { setError('Kodun süresi doldu! Lütfen yeni kod isteyin.'); return; }
+    setMessage(''); setError(''); setLoading(true);
     try {
-      const response = await verifyOtp(email, otp, otpMode);
-      setMessage(response.data.message);
-      setUserName(response.data.firstName || '');
+      const res = await verifyOtp(email, otp, otpMode);
+      setMessage(res.data.message);
+      setUserName(res.data.firstName || '');
       setStep('success');
     } catch (err) {
       setError(err.response?.data?.error || err.message);
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
   if (step === 'success') {
     return (
-      <MainDashboardView
-        userName={userName}
-        email={email}
-        onLogout={resetForm}
-      />
+      <>
+        <MainDashboardView userName={userName} email={email} onLogout={resetForm} />
+        <FailedLoginToast info={failedLoginInfo} onDismiss={() => setFailedLoginInfo(null)} />
+      </>
     );
   }
 
   return (
     <div className="login-container">
       <div className="login-card">
-        <h2 className="login-title">Tokerbank Digital Login</h2>
+        <div className="login-brand">
+          <span className="login-brand-icon">🛡️</span>
+          <h2 className="login-title">TokerBank Digital</h2>
+          <p className="login-subtitle">Enterprise Auth &amp; AI Fraud Shield</p>
+        </div>
 
         {message && <div className="alert-message success">{message}</div>}
         {error && <div className="alert-message error">{error}</div>}
 
-        {/* Step 1: E-posta Giriş */}
+        {/* Step 1: E-posta */}
         {step === 'email' && (
           <form className="login-form" onSubmit={handleCheckEmail}>
             <div className="form-group">
-              <label className="form-label" htmlFor="email">
-                E-posta Adresi
-              </label>
-              <input
-                id="email"
-                type="email"
-                className="form-input"
-                placeholder="ornek@gmail.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
+              <label className="form-label" htmlFor="email">E-POSTA ADRESİ</label>
+              <input id="email" type="email" className="form-input"
+                placeholder="ornek@gmail.com" value={email}
+                onChange={(e) => setEmail(e.target.value)} required autoFocus />
             </div>
             <button type="submit" className="btn btn-primary" disabled={loading}>
-              {loading ? 'Kontrol ediliyor...' : 'Devam Et'}
+              {loading ? 'Kontrol ediliyor...' : 'Devam Et →'}
             </button>
           </form>
         )}
 
-        {/* Step 2a: Login OTP */}
+        {/* Step 2a: Şifre Girişi (Login) */}
+        {step === 'login-password' && (
+          <form className="login-form" onSubmit={handleVerifyPassword}>
+            <p className="step-info">
+              Hoş geldiniz{userName ? `, <strong>${userName}</strong>` : ''}!<br />
+              <span className="email-display">{maskEmail(email)}</span> hesabınız için şifrenizi girin.
+            </p>
+            <div className="form-group">
+              <label className="form-label" htmlFor="login-pwd">ŞİFRE</label>
+              <div className="password-input-wrapper">
+                <input id="login-pwd"
+                  type={showPassword ? 'text' : 'password'}
+                  className="form-input" placeholder="••••••••"
+                  value={password} onChange={(e) => setPassword(e.target.value)}
+                  required autoFocus />
+                <button type="button" className="password-toggle"
+                  onClick={() => setShowPassword(!showPassword)}>
+                  {showPassword ? '🙈' : '👁️'}
+                </button>
+              </div>
+            </div>
+            <button type="submit" className="btn btn-primary" disabled={loading || !password}>
+              {loading ? 'Doğrulanıyor...' : 'Şifreyi Doğrula →'}
+            </button>
+            <button type="button" className="btn btn-secondary" onClick={resetForm}>← Geri Dön</button>
+          </form>
+        )}
+
+        {/* Step 2b: Kayıt Formu */}
+        {step === 'register' && (
+          <form className="login-form" onSubmit={handleRegister}>
+            <p className="step-info">
+              <strong>{email}</strong> ile yeni hesap oluşturun:
+            </p>
+            <div className="form-group">
+              <label className="form-label" htmlFor="firstName">AD</label>
+              <input id="firstName" type="text" className="form-input"
+                placeholder="Adınız" value={firstName}
+                onChange={(e) => setFirstName(e.target.value)} required autoFocus />
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="lastName">SOYAD</label>
+              <input id="lastName" type="text" className="form-input"
+                placeholder="Soyadınız" value={lastName}
+                onChange={(e) => setLastName(e.target.value)} required />
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="reg-pwd">ŞİFRE OLUŞTUR</label>
+              <div className="password-input-wrapper">
+                <input id="reg-pwd"
+                  type={showPassword ? 'text' : 'password'}
+                  className="form-input" placeholder="En az 8 karakter"
+                  value={password} onChange={(e) => setPassword(e.target.value)} required />
+                <button type="button" className="password-toggle"
+                  onClick={() => setShowPassword(!showPassword)}>
+                  {showPassword ? '🙈' : '👁️'}
+                </button>
+              </div>
+              {/* Güç Ölçer */}
+              {password.length > 0 && (
+                <div className="password-strength">
+                  <div className="strength-bar-track">
+                    <div className="strength-bar-fill"
+                      style={{ width: `${(pwdScore / 4) * 100}%`, background: pwdStrengthColor }} />
+                  </div>
+                  <span className="strength-label" style={{ color: pwdStrengthColor }}>
+                    {pwdStrengthLabel}
+                  </span>
+                  <ul className="password-rules">
+                    <li className={pwdRules.length ? 'rule-ok' : 'rule-fail'}>
+                      {pwdRules.length ? '✓' : '✗'} En az 8 karakter
+                    </li>
+                    <li className={pwdRules.uppercase ? 'rule-ok' : 'rule-fail'}>
+                      {pwdRules.uppercase ? '✓' : '✗'} En az 1 büyük harf
+                    </li>
+                    <li className={pwdRules.number ? 'rule-ok' : 'rule-fail'}>
+                      {pwdRules.number ? '✓' : '✗'} En az 1 rakam
+                    </li>
+                    <li className={pwdRules.special ? 'rule-ok' : 'rule-fail'}>
+                      {pwdRules.special ? '✓' : '✗'} En az 1 özel karakter (!@#$...)
+                    </li>
+                  </ul>
+                </div>
+              )}
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="confirm-pwd">ŞİFRE TEKRAR</label>
+              <div className="password-input-wrapper">
+                <input id="confirm-pwd"
+                  type={showConfirm ? 'text' : 'password'}
+                  className={`form-input ${confirmPassword && password !== confirmPassword ? 'input-error' : ''}`}
+                  placeholder="Şifrenizi tekrar girin"
+                  value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />
+                <button type="button" className="password-toggle"
+                  onClick={() => setShowConfirm(!showConfirm)}>
+                  {showConfirm ? '🙈' : '👁️'}
+                </button>
+              </div>
+              {confirmPassword && password !== confirmPassword && (
+                <span className="field-error">Şifreler eşleşmiyor</span>
+              )}
+            </div>
+            <button type="submit" className="btn btn-primary"
+              disabled={loading || !isPasswordValid || password !== confirmPassword || !firstName || !lastName}>
+              {loading ? 'Kaydediliyor...' : 'Kayıt Ol →'}
+            </button>
+            <button type="button" className="btn btn-secondary" onClick={resetForm}>← Geri Dön</button>
+          </form>
+        )}
+
+        {/* Step 3a: Login OTP */}
         {step === 'login-otp' && (
           <form className="login-form" onSubmit={handleOtpSubmit}>
-            <div className="form-group">
-              <label className="form-label" htmlFor="otp">
-                6 Haneli Giriş Doğrulama Kodu
-              </label>
-              <p style={{ fontSize: '13px', color: 'var(--text)', margin: '0 0 10px 0' }}>
-                Hoş geldiniz{userName ? `, ${userName}` : ''}!<br />
-                <strong>{maskEmail(email)}</strong> adresine gönderilen kodu giriniz.
-              </p>
-              
-              <div className={`timer-badge ${timeLeft === 0 ? 'expired' : ''}`}>
-                {timeLeft > 0 ? (
-                  <>⏱ Kalan Süre: <strong>{formatTime(timeLeft)}</strong></>
-                ) : (
-                  <>⚠️ Kodun süresi doldu (2 dk). Lütfen yeni kod isteyin.</>
-                )}
-              </div>
-
-              <input
-                id="otp"
-                type="text"
-                className="form-input otp-input"
-                placeholder="••••••"
-                value={otp}
-                onChange={(e) => setOtp(e.target.value)}
-                required
-                maxLength="6"
-                disabled={timeLeft === 0}
-                autoFocus
-              />
+            <p className="step-info">
+              Hoş geldiniz{userName ? `, ${userName}` : ''}!<br />
+              <span className="email-display">{maskEmail(email)}</span> adresine gönderilen 6 haneli kodu girin.
+            </p>
+            <div className={`timer-badge ${timeLeft === 0 ? 'expired' : ''}`}>
+              {timeLeft > 0
+                ? <><span>⏱</span> Kalan Süre: <strong>{formatTime(timeLeft)}</strong></>
+                : <><span>⚠️</span> Kodun süresi doldu (2 dk). Yeni kod isteyin.</>}
             </div>
-
+            <div className="form-group">
+              <label className="form-label" htmlFor="otp">6 HANELİ DOĞRULAMA KODU</label>
+              <input id="otp" type="text" className="form-input otp-input"
+                placeholder="••••••" value={otp}
+                onChange={(e) => setOtp(e.target.value)}
+                required maxLength="6" disabled={timeLeft === 0} autoFocus />
+            </div>
             <button type="submit" className="btn btn-success" disabled={loading || timeLeft === 0}>
               {loading ? 'Doğrulanıyor...' : 'Giriş Yap'}
             </button>
-
             <button type="button" className="btn btn-outline" onClick={handleResendOtp} disabled={loading}>
               Kodu Tekrar Gönder
             </button>
-
-            <button type="button" className="btn btn-secondary" onClick={resetForm}>
-              Geri Dön
-            </button>
+            <button type="button" className="btn btn-secondary" onClick={resetForm}>← Geri Dön</button>
           </form>
         )}
 
-        {/* Step 2b: Register Form */}
-        {step === 'register' && (
-          <form className="login-form" onSubmit={handleRegister}>
-            <div className="form-group">
-              <p style={{ fontSize: '13px', color: 'var(--text)', margin: '0 0 6px 0' }}>
-                <strong>{email}</strong> adresi ile kayıtlı hesap bulunamadı. Yeni hesap oluşturun:
-              </p>
-              <label className="form-label" htmlFor="firstName">Ad</label>
-              <input
-                id="firstName"
-                type="text"
-                className="form-input"
-                placeholder="Adınız"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-                required
-                autoFocus
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label" htmlFor="lastName">Soyad</label>
-              <input
-                id="lastName"
-                type="text"
-                className="form-input"
-                placeholder="Soyadınız"
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-                required
-              />
-            </div>
-            <button type="submit" className="btn btn-primary" disabled={loading}>
-              {loading ? 'Kaydediliyor...' : 'Kayıt Ol'}
-            </button>
-            <button type="button" className="btn btn-secondary" onClick={resetForm}>
-              Geri Dön
-            </button>
-          </form>
-        )}
-
-        {/* Step 3: Register OTP */}
+        {/* Step 3b: Register OTP */}
         {step === 'register-otp' && (
           <form className="login-form" onSubmit={handleOtpSubmit}>
-            <div className="form-group">
-              <label className="form-label" htmlFor="otp-register">
-                6 Haneli Kayıt Doğrulama Kodu
-              </label>
-              <p style={{ fontSize: '13px', color: 'var(--text)', margin: '0 0 10px 0' }}>
-                <strong>{maskEmail(email)}</strong> adresine gönderilen doğrulama kodunu giriniz.
-              </p>
-
-              <div className={`timer-badge ${timeLeft === 0 ? 'expired' : ''}`}>
-                {timeLeft > 0 ? (
-                  <>⏱ Kalan Süre: <strong>{formatTime(timeLeft)}</strong></>
-                ) : (
-                  <>⚠️ Kodun süresi doldu (2 dk). Lütfen yeni kod isteyin.</>
-                )}
-              </div>
-
-              <input
-                id="otp-register"
-                type="text"
-                className="form-input otp-input"
-                placeholder="••••••"
-                value={otp}
-                onChange={(e) => setOtp(e.target.value)}
-                required
-                maxLength="6"
-                disabled={timeLeft === 0}
-                autoFocus
-              />
+            <p className="step-info">
+              <span className="email-display">{maskEmail(email)}</span> adresine gönderilen kayıt doğrulama kodunu girin.
+            </p>
+            <div className={`timer-badge ${timeLeft === 0 ? 'expired' : ''}`}>
+              {timeLeft > 0
+                ? <><span>⏱</span> Kalan Süre: <strong>{formatTime(timeLeft)}</strong></>
+                : <><span>⚠️</span> Kodun süresi doldu. Yeni kod isteyin.</>}
             </div>
-
+            <div className="form-group">
+              <label className="form-label" htmlFor="otp-register">6 HANELİ DOĞRULAMA KODU</label>
+              <input id="otp-register" type="text" className="form-input otp-input"
+                placeholder="••••••" value={otp}
+                onChange={(e) => setOtp(e.target.value)}
+                required maxLength="6" disabled={timeLeft === 0} autoFocus />
+            </div>
             <button type="submit" className="btn btn-success" disabled={loading || timeLeft === 0}>
               {loading ? 'Doğrulanıyor...' : 'Doğrula ve Kayıt Tamamla'}
             </button>
-
             <button type="button" className="btn btn-outline" onClick={handleResendOtp} disabled={loading}>
               Kodu Tekrar Gönder
             </button>
-
-            <button type="button" className="btn btn-secondary" onClick={resetForm}>
-              Geri Dön
-            </button>
+            <button type="button" className="btn btn-secondary" onClick={resetForm}>← Geri Dön</button>
           </form>
         )}
       </div>

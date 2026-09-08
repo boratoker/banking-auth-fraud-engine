@@ -3,6 +3,7 @@ package com.banking.auth.controller;
 import com.banking.auth.dto.CheckEmailRequest;
 import com.banking.auth.dto.RegisterRequest;
 import com.banking.auth.dto.VerifyOtpRequest;
+import com.banking.auth.dto.VerifyPasswordRequest;
 import com.banking.auth.model.User;
 import com.banking.auth.repository.UserRepository;
 import com.banking.auth.service.EmailService;
@@ -12,10 +13,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.http.ResponseEntity;
 
 import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
@@ -26,6 +30,8 @@ import java.util.concurrent.ConcurrentHashMap;
 public class AuthController {
 
     private static final Logger log = LoggerFactory.getLogger(AuthController.class);
+    private static final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+    private static final DateTimeFormatter DT_FORMAT = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
 
     @Autowired(required = false)
     private StringRedisTemplate redisTemplate;
@@ -60,7 +66,7 @@ public class AuthController {
         return ResponseEntity.ok(Map.of("exists", exists, "email", email));
     }
 
-    // Step 2a: Mevcut kullanıcı → OTP gönder (login)
+    // Step 2a: Mevcut kullanıcı → şifre doğrulama gerektiğini bildir
     @PostMapping("/login")
     public ResponseEntity<Map<String, Object>> login(@RequestBody CheckEmailRequest request) {
         if (request.getEmail() == null || request.getEmail().isBlank()) {
@@ -75,11 +81,63 @@ public class AuthController {
         }
 
         User user = userOpt.get();
-        String otp = generateAndSendOtp(email, "login");
+
+        // Şifre yoksa hata ver (DB sıfırlanmış olması gerekiyor)
+        if (user.getPasswordHash() == null || user.getPasswordHash().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of(
+                "error", "Bu hesapta şifre tanımlı değil. Lütfen yeniden kayıt olunuz."
+            ));
+        }
 
         return ResponseEntity.ok(Map.of(
-                "message", "OTP kodunuz " + maskEmail(email) + " adresine gönderildi.",
-                "firstName", user.getFirstName()
+            "requiresPassword", true,
+            "firstName", user.getFirstName()
+        ));
+    }
+
+    // Step 2a-2: Şifre doğrulama → doğruysa OTP gönder
+    @PostMapping("/verify-password")
+    public ResponseEntity<Map<String, Object>> verifyPassword(@RequestBody VerifyPasswordRequest request) {
+        if (request.getEmail() == null || request.getEmail().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "E-posta adresi gereklidir."));
+        }
+        if (request.getPassword() == null || request.getPassword().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Şifre gereklidir."));
+        }
+
+        String email = request.getEmail().trim().toLowerCase();
+        Optional<User> userOpt = userRepository.findByEmail(email);
+
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Kullanıcı bulunamadı."));
+        }
+
+        User user = userOpt.get();
+
+        if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
+            // Başarısız giriş — tarihi kaydet
+            LocalDateTime failedAt = LocalDateTime.now();
+            user.setLastFailedLoginAt(failedAt);
+            userRepository.save(user);
+            sendKafkaEvent("PASSWORD_FAILED:" + email + ":" + failedAt);
+            return ResponseEntity.status(401).body(Map.of(
+                "error", "Şifre yanlış. Lütfen tekrar deneyiniz.",
+                "failedAt", failedAt.format(DT_FORMAT)
+            ));
+        }
+
+        // Şifre doğru → OTP gönder
+        generateAndSendOtp(email, "login");
+
+        // Önceki başarısız deneme bilgisini al ve sıfırla
+        String lastFailedAt = user.getLastFailedLoginAt() != null
+            ? user.getLastFailedLoginAt().format(DT_FORMAT)
+            : null;
+
+        return ResponseEntity.ok(Map.of(
+            "message", "Şifre doğrulandı. OTP kodunuz " + maskEmail(email) + " adresine gönderildi.",
+            "firstName", user.getFirstName(),
+            "lastFailedLoginAt", lastFailedAt != null ? lastFailedAt : ""
         ));
     }
 
@@ -95,6 +153,12 @@ public class AuthController {
         if (request.getLastName() == null || request.getLastName().isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("error", "Soyad gereklidir."));
         }
+        if (request.getPassword() == null || request.getPassword().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Şifre gereklidir."));
+        }
+        if (request.getPassword().length() < 8) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Şifre en az 8 karakter olmalıdır."));
+        }
 
         String email = request.getEmail().trim().toLowerCase();
 
@@ -102,15 +166,17 @@ public class AuthController {
             return ResponseEntity.badRequest().body(Map.of("error", "Bu e-posta zaten kayıtlıdır. Giriş yapınız."));
         }
 
-        // Kullanıcıyı oluştur (emailVerified = false)
+        // Şifreyi hash'le ve kullanıcıyı kaydet
+        String hashedPassword = passwordEncoder.encode(request.getPassword());
         User user = new User(email, request.getFirstName().trim(), request.getLastName().trim());
+        user.setPasswordHash(hashedPassword);
         userRepository.save(user);
 
         // E-posta doğrulama OTP'si gönder
-        String otp = generateAndSendOtp(email, "register");
+        generateAndSendOtp(email, "register");
 
         return ResponseEntity.ok(Map.of(
-                "message", "Kayıt başarılı! Doğrulama kodu " + maskEmail(email) + " adresine gönderildi."
+            "message", "Kayıt başarılı! Doğrulama kodu " + maskEmail(email) + " adresine gönderildi."
         ));
     }
 
@@ -128,7 +194,7 @@ public class AuthController {
         String storedOtp = getStoredOtp(email);
         String inputOtp = request.getOtp().trim();
 
-        if ((storedOtp != null && storedOtp.equals(inputOtp)) || "123456".equals(inputOtp) || inputOtp.length() == 6) {
+        if (storedOtp != null && storedOtp.equals(inputOtp)) {
             clearStoredOtp(email);
 
             Optional<User> userOpt = userRepository.findByEmail(email);
@@ -143,17 +209,16 @@ public class AuthController {
 
                 String mode = request.getMode() != null ? request.getMode() : "login";
                 String msg = "register".equals(mode)
-                        ? "Kayıt tamamlandı! E-posta doğrulandı. Hoş geldiniz, " + user.getFirstName() + "!"
-                        : "Giriş başarılı! Hoş geldiniz, " + user.getFirstName() + "!";
+                    ? "Kayıt tamamlandı! E-posta doğrulandı. Hoş geldiniz, " + user.getFirstName() + "!"
+                    : "Giriş başarılı! Hoş geldiniz, " + user.getFirstName() + "!";
 
                 return ResponseEntity.ok(Map.of(
-                        "message", msg,
-                        "firstName", user.getFirstName(),
-                        "lastName", user.getLastName(),
-                        "email", user.getEmail()
+                    "message", msg,
+                    "firstName", user.getFirstName(),
+                    "lastName", user.getLastName(),
+                    "email", user.getEmail()
                 ));
             }
-
             return ResponseEntity.badRequest().body(Map.of("error", "Kullanıcı bulunamadı."));
         }
 
@@ -205,7 +270,7 @@ public class AuthController {
             if (System.currentTimeMillis() <= expiry) {
                 return parts[0];
             } else {
-                otpFallbackMap.remove(email); // Süresi dolmuş
+                otpFallbackMap.remove(email);
             }
         }
         return null;
