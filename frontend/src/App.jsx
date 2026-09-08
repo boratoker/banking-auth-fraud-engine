@@ -39,8 +39,8 @@ const FailedLoginToast = ({ info, onDismiss }) => {
 };
 
 function App() {
-  // Steps: 'email' → 'login-password' → 'login-otp' | 'register' → 'register-otp' → 'success'
-  const [step, setStep] = useState('email');
+  // Steps: 'login' → 'login-otp' | 'register' → 'register-otp' → 'success'
+  const [step, setStep] = useState('login');
   const [email, setEmail] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -79,7 +79,7 @@ function App() {
   };
 
   const resetForm = () => {
-    setStep('email'); setEmail(''); setFirstName(''); setLastName('');
+    setStep('login'); setEmail(''); setFirstName(''); setLastName('');
     setPassword(''); setConfirmPassword(''); setOtp('');
     setMessage(''); setError(''); setUserName(''); setOtpMode('login'); setTimeLeft(120);
   };
@@ -93,8 +93,8 @@ function App() {
       if (res.data.exists) {
         const loginRes = await login(email);
         if (loginRes.data.requiresPassword) {
-          setUserName(loginRes.data.firstName || '');
-          setStep('login-password');
+          setMessage('Şifrenizi tekrar girerek OTP isteyin.');
+          setStep('login');
         }
       } else {
         setMessage(`${email} adresi ile kayıtlı hesap bulunamadı. Yeni hesap oluşturun.`);
@@ -107,7 +107,7 @@ function App() {
     } finally { setLoading(false); }
   };
 
-  // Step 2a: Şifre doğrulama
+  // Step 1: Şifre doğrulama (İlk Giriş Ekranı)
   const handleVerifyPassword = async (e) => {
     e.preventDefault();
     setMessage(''); setError(''); setLoading(true);
@@ -200,28 +200,16 @@ function App() {
         {message && <div className="alert-message success">{message}</div>}
         {error && <div className="alert-message error">{error}</div>}
 
-        {/* Step 1: E-posta */}
-        {step === 'email' && (
-          <form className="login-form" onSubmit={handleCheckEmail}>
+        {/* Step 1: Giriş Ekranı (E-Posta + Şifre) */}
+        {step === 'login' && (
+          <form className="login-form" onSubmit={handleVerifyPassword}>
             <div className="form-group">
               <label className="form-label" htmlFor="email">E-POSTA ADRESİ</label>
               <input id="email" type="email" className="form-input"
                 placeholder="ornek@gmail.com" value={email}
                 onChange={(e) => setEmail(e.target.value)} required autoFocus />
             </div>
-            <button type="submit" className="btn btn-primary" disabled={loading}>
-              {loading ? 'Kontrol ediliyor...' : 'Devam Et →'}
-            </button>
-          </form>
-        )}
-
-        {/* Step 2a: Şifre Girişi (Login) */}
-        {step === 'login-password' && (
-          <form className="login-form" onSubmit={handleVerifyPassword}>
-            <p className="step-info">
-              Hoş geldiniz{userName ? `, <strong>${userName}</strong>` : ''}!<br />
-              <span className="email-display">{maskEmail(email)}</span> hesabınız için şifrenizi girin.
-            </p>
+            
             <div className="form-group">
               <label className="form-label" htmlFor="login-pwd">ŞİFRE</label>
               <div className="password-input-wrapper">
@@ -229,17 +217,31 @@ function App() {
                   type={showPassword ? 'text' : 'password'}
                   className="form-input" placeholder="••••••••"
                   value={password} onChange={(e) => setPassword(e.target.value)}
-                  required autoFocus />
+                  required />
                 <button type="button" className="password-toggle"
                   onClick={() => setShowPassword(!showPassword)}>
                   {showPassword ? '🙈' : '👁️'}
                 </button>
               </div>
             </div>
-            <button type="submit" className="btn btn-primary" disabled={loading || !password}>
-              {loading ? 'Doğrulanıyor...' : 'Şifreyi Doğrula →'}
+            
+            <button type="submit" className="btn btn-primary" disabled={loading || !password || !email}>
+              {loading ? 'Giriş Yapılıyor...' : 'Giriş Yap →'}
             </button>
-            <button type="button" className="btn btn-secondary" onClick={resetForm}>← Geri Dön</button>
+            
+            <div style={{ textAlign: 'center', marginTop: '20px' }}>
+              <button 
+                type="button" 
+                style={{ 
+                  background: '#007BFF', border: 'none', color: '#FFFFFF', 
+                  fontSize: '15px', fontWeight: 'bold', cursor: 'pointer', 
+                  padding: '12px 24px', borderRadius: '8px'
+                }}
+                onClick={() => { resetForm(); setStep('register'); }}
+              >
+                Kayıt Ol
+              </button>
+            </div>
           </form>
         )}
 

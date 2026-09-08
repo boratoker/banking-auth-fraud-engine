@@ -29,7 +29,7 @@ const STRENGTH_COLORS = ['', '#ff4444', '#ff9100', '#ffcc00', '#00e676'];
 const STRENGTH_LABELS = ['', 'Çok Zayıf', 'Zayıf', 'Orta', 'Güçlü'];
 
 const AuthScreen = ({ onAuthSuccess }) => {
-  const [step, setStep] = useState('email');
+  const [step, setStep] = useState('login');
   const [email, setEmail] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -68,7 +68,7 @@ const AuthScreen = ({ onAuthSuccess }) => {
   };
 
   const resetForm = () => {
-    setStep('email'); setEmail(''); setFirstName(''); setLastName('');
+    setStep('login'); setEmail(''); setFirstName(''); setLastName('');
     setPassword(''); setConfirmPassword(''); setOtp('');
     setMessage(''); setError(''); setUserName(''); setOtpMode('login'); setTimeLeft(120);
   };
@@ -143,7 +143,7 @@ const AuthScreen = ({ onAuthSuccess }) => {
         setMessage(res.data.message || 'Yeni kod gönderildi.');
       } else {
         setMessage('Şifrenizi tekrar girerek OTP isteyin.');
-        setStep('login-password');
+        setStep('login');
         return;
       }
       setTimeLeft(120); setOtp('');
@@ -183,8 +183,8 @@ const AuthScreen = ({ onAuthSuccess }) => {
           <View style={globalStyles.alertError}><Text style={globalStyles.alertErrorText}>{error}</Text></View>
         ) : null}
 
-        {/* Step 1: E-posta */}
-        {step === 'email' && (
+        {/* Step 1: Giriş Ekranı (E-Posta + Şifre) */}
+        {step === 'login' && (
           <View style={globalStyles.inputGroup}>
             <Text style={globalStyles.label}>E-POSTA ADRESİ</Text>
             <TextInput
@@ -196,23 +196,7 @@ const AuthScreen = ({ onAuthSuccess }) => {
               value={email}
               onChangeText={setEmail}
             />
-            <TouchableOpacity
-              style={[globalStyles.btnPrimary, { marginTop: 16 }]}
-              onPress={handleCheckEmail}
-              disabled={loading}
-            >
-              {loading ? <ActivityIndicator color="#090D16" /> : <Text style={globalStyles.btnPrimaryText}>Devam Et ➔</Text>}
-            </TouchableOpacity>
-          </View>
-        )}
 
-        {/* Step 2a: Şifre Girişi (Login) */}
-        {step === 'login-password' && (
-          <View style={globalStyles.inputGroup}>
-            <Text style={styles.stepInfo}>
-              Hoş geldiniz{userName ? `, ${userName}` : ''}!{'\n'}
-              <Text style={{ color: colors.primary }}>{maskEmail(email)}</Text> hesabınız için şifrenizi girin.
-            </Text>
             <Text style={globalStyles.label}>ŞİFRE</Text>
             <View style={styles.passwordWrapper}>
               <TextInput
@@ -230,13 +214,19 @@ const AuthScreen = ({ onAuthSuccess }) => {
             <TouchableOpacity
               style={[globalStyles.btnPrimary, { marginTop: 16 }]}
               onPress={handleVerifyPassword}
-              disabled={loading || !password}
+              disabled={loading || !password || !email}
             >
-              {loading ? <ActivityIndicator color="#090D16" /> : <Text style={globalStyles.btnPrimaryText}>Şifreyi Doğrula ➔</Text>}
+              {loading ? <ActivityIndicator color="#090D16" /> : <Text style={globalStyles.btnPrimaryText}>Giriş Yap ➔</Text>}
             </TouchableOpacity>
-            <TouchableOpacity style={{ marginTop: 12, alignItems: 'center' }} onPress={resetForm}>
-              <Text style={{ color: colors.textMuted, fontSize: 13 }}>← Farklı E-posta Gir</Text>
-            </TouchableOpacity>
+            
+            <View style={{ marginTop: 20, alignItems: 'center' }}>
+              <TouchableOpacity 
+                onPress={() => { resetForm(); setStep('register'); }} 
+                style={{ backgroundColor: '#007BFF', paddingVertical: 12, paddingHorizontal: 32, borderRadius: 8, width: '100%', alignItems: 'center' }}
+              >
+                <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: 'bold' }}>Kayıt Ol</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 
