@@ -1,0 +1,16 @@
+{
+  "expo": {
+    "name": "TokerBank Mobile",
+    "slug": "tokerbank-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.tokerbank.mobile"
+    },
+    "android": {
+      "package": "com.tokerbank.mobile"
+    }
+  }
+}

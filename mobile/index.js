@@ -1,9 +1,5 @@
-import { AppRegistry } from 'react-native';
+import { registerRootComponent } from 'expo';
 import App from './App';
 
-AppRegistry.registerComponent('TokerBankMobile', () => App);
+registerRootComponent(App);
 
-if (typeof document !== 'undefined') {
-  const rootTag = document.getElementById('root');
-  AppRegistry.runApplication('TokerBankMobile', { rootTag });
-}

@@ -1,13 +1,20 @@
 // TokerBank Mobile API Configuration
 import axios from 'axios';
+import Constants from 'expo-constants';
 
-// Default Spring Cloud Gateway URL
-// Emülatör / Cihaz ip adresi ortam değişkeni veya varsayılan localhost (8080)
-const API_HOST = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
-  ? `http://${window.location.hostname}:8080`
-  : 'http://localhost:8080';
+const getHostIp = () => {
+  if (typeof window !== 'undefined' && window.location && window.location.hostname) {
+    return window.location.hostname;
+  }
+  const hostUri = Constants?.expoConfig?.hostUri || Constants?.manifest2?.extra?.expoGo?.developer?.tool;
+  if (hostUri) {
+    return hostUri.split(':')[0];
+  }
+  return 'localhost';
+};
 
-export const BASE_URL = API_HOST;
+const hostIp = getHostIp();
+export const BASE_URL = `http://${hostIp}:8080`;
 
 const apiClient = axios.create({
   baseURL: BASE_URL,
@@ -19,3 +26,4 @@ const apiClient = axios.create({
 });
 
 export default apiClient;
+
