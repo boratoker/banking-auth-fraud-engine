@@ -56,11 +56,26 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [timeLeft, setTimeLeft] = useState(120);
   const [failedLoginInfo, setFailedLoginInfo] = useState(null);
+  const cardInnerRef = useRef(null);
+  const [cardHeight, setCardHeight] = useState(null);
 
   const { score: pwdScore, rules: pwdRules } = calcPasswordStrength(password);
   const pwdStrengthLabel = ['', 'Çok Zayıf', 'Zayıf', 'Orta', 'Güçlü'][pwdScore] || '';
   const pwdStrengthColor = ['', '#ff4444', '#ff9100', '#ffcc00', '#00e676'][pwdScore] || '';
   const isPasswordValid = pwdRules.length && pwdRules.uppercase && pwdRules.number && pwdRules.special;
+
+  useEffect(() => {
+    if (!cardInnerRef.current) return;
+    const observer = new ResizeObserver(() => {
+      if (cardInnerRef.current) {
+        const innerHeight = cardInnerRef.current.getBoundingClientRect().height;
+        const paddingY = step === 'register' ? 40 : 64;
+        setCardHeight(innerHeight + paddingY);
+      }
+    });
+    observer.observe(cardInnerRef.current);
+    return () => observer.disconnect();
+  }, [step]);
 
   useEffect(() => {
     let timer;
@@ -197,12 +212,20 @@ function App() {
 
   return (
     <div className="login-container">
-      <div className="login-card">
-        <div className="login-brand">
-          <span className="login-brand-icon">🛡️</span>
-          <h2 className="login-title">TokerBank Digital</h2>
-          <p className="login-subtitle">Enterprise Auth &amp; AI Fraud Shield</p>
-        </div>
+      <div 
+        className={`login-card ${step === 'register' ? 'compact' : ''}`}
+        style={{
+          height: cardHeight ? `${cardHeight}px` : 'auto',
+          transition: 'height 0.45s cubic-bezier(0.16, 1, 0.3, 1), padding 0.45s cubic-bezier(0.16, 1, 0.3, 1)',
+          overflow: 'hidden'
+        }}
+      >
+        <div ref={cardInnerRef} style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <div className="login-brand" style={step === 'register' ? { marginBottom: '12px' } : {}}>
+            <span className="login-brand-icon" style={step === 'register' ? { fontSize: '28px' } : {}}>🛡️</span>
+            <h2 className="login-title" style={step === 'register' ? { fontSize: '20px', marginBottom: '8px' } : {}}>TokerBank Digital</h2>
+            {step !== 'register' && <p className="login-subtitle">Enterprise Auth &amp; AI Fraud Shield</p>}
+          </div>
 
         {message && <div className="alert-message success">{message}</div>}
         {error && <div className="alert-message error">{error}</div>}
@@ -254,21 +277,23 @@ function App() {
 
         {/* Step 2b: Kayıt Formu */}
         {step === 'register' && (
-          <form className="login-form" onSubmit={handleRegister}>
-            <p className="step-info">
+          <form className="login-form" style={{ gap: '10px' }} onSubmit={handleRegister}>
+            <p className="step-info" style={{ marginBottom: '4px' }}>
               <strong>{email}</strong> ile yeni hesap oluşturun:
             </p>
-            <div className="form-group">
-              <label className="form-label" htmlFor="firstName">AD</label>
-              <input id="firstName" type="text" className="form-input"
-                placeholder="Adınız" value={firstName}
-                onChange={(e) => setFirstName(e.target.value)} required autoFocus />
-            </div>
-            <div className="form-group">
-              <label className="form-label" htmlFor="lastName">SOYAD</label>
-              <input id="lastName" type="text" className="form-input"
-                placeholder="Soyadınız" value={lastName}
-                onChange={(e) => setLastName(e.target.value)} required />
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label" htmlFor="firstName">AD</label>
+                <input id="firstName" type="text" className="form-input"
+                  placeholder="Adınız" value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)} required autoFocus />
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="lastName">SOYAD</label>
+                <input id="lastName" type="text" className="form-input"
+                  placeholder="Soyadınız" value={lastName}
+                  onChange={(e) => setLastName(e.target.value)} required />
+              </div>
             </div>
             <div className="form-group">
               <label className="form-label" htmlFor="reg-pwd">ŞİFRE OLUŞTUR</label>
@@ -303,7 +328,7 @@ function App() {
                       {pwdRules.number ? '✓' : '✗'} En az 1 rakam
                     </li>
                     <li className={pwdRules.special ? 'rule-ok' : 'rule-fail'}>
-                      {pwdRules.special ? '✓' : '✗'} En az 1 özel karakter (!@#$...)
+                      {pwdRules.special ? '✓' : '✗'} En az 1 özel karakter
                     </li>
                   </ul>
                 </div>
@@ -390,6 +415,7 @@ function App() {
             <button type="button" className="btn btn-secondary" onClick={resetForm}>← Geri Dön</button>
           </form>
         )}
+        </div>
       </div>
     </div>
   );

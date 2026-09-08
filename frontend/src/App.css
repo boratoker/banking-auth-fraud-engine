@@ -21,22 +21,39 @@
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 16px;
-  padding: 40px 32px;
+  padding: 32px 28px;
   box-shadow: var(--shadow);
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: height, padding, transform;
+}
+
+.login-card.compact {
+  padding: 20px 24px;
+}
+
+.form-row {
+  width: 100%;
+  display: flex;
+  gap: 12px;
+}
+
+.form-row .form-group {
+  flex: 1;
 }
 
 .login-title {
   font-family: var(--heading);
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 600;
   color: var(--text-h);
-  margin: 0 0 24px 0;
+  margin: 0 0 16px 0;
   text-align: center;
+  transition: all 0.3s ease;
 }
 
 .alert-message {
@@ -48,18 +65,18 @@
   line-height: 1.5;
   margin-bottom: 20px;
   text-align: left;
+  animation: expandAlert 0.35s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.alert-message.success {
-  background: rgba(40, 167, 69, 0.12);
-  color: #28a745;
-  border: 1px solid rgba(40, 167, 69, 0.28);
-}
-
-.alert-message.error {
-  background: rgba(220, 53, 69, 0.12);
-  color: #dc3545;
-  border: 1px solid rgba(220, 53, 69, 0.28);
+@keyframes expandAlert {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .login-form {
@@ -68,6 +85,18 @@
   flex-direction: column;
   align-items: center;
   gap: 16px;
+  animation: smoothFormFade 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes smoothFormFade {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .form-group {
@@ -234,6 +263,19 @@
 .password-strength {
   width: 100%;
   margin-top: 8px;
+  animation: expandStrength 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: top center;
+}
+
+@keyframes expandStrength {
+  from {
+    opacity: 0;
+    transform: scaleY(0.8) translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: scaleY(1) translateY(0);
+  }
 }
 .strength-bar-track {
   width: 100%;
@@ -258,12 +300,13 @@
   list-style: none;
   padding: 0;
   margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px 10px;
+  text-align: left;
 }
 .password-rules li {
-  font-size: 12px;
+  font-size: 11px;
 }
 .rule-ok {
   color: #00e676;

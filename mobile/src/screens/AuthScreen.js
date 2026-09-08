@@ -8,10 +8,23 @@ import {
   StyleSheet,
   ActivityIndicator,
   Animated,
+  LayoutAnimation,
+  Platform,
+  UIManager,
 } from 'react-native';
 import { checkEmail, login, verifyPassword, register, verifyOtp } from '../api/authApi';
 import { colors } from '../theme/colors';
 import { globalStyles } from '../theme/styles';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+const animateLayout = () => {
+  try {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+  } catch (e) {}
+};
 
 // Şifre güç hesaplama
 const calcPasswordStrength = (pwd) => {
@@ -29,22 +42,27 @@ const STRENGTH_COLORS = ['', '#ff4444', '#ff9100', '#ffcc00', '#00e676'];
 const STRENGTH_LABELS = ['', 'Çok Zayıf', 'Zayıf', 'Orta', 'Güçlü'];
 
 const AuthScreen = ({ onAuthSuccess }) => {
-  const [step, setStep] = useState('login');
+  const [step, setStepState] = useState('login');
   const [email, setEmail] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [password, setPassword] = useState('');
+  const [password, setPasswordState] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [otp, setOtp] = useState('');
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
+  const [message, setMessageState] = useState('');
+  const [error, setErrorState] = useState('');
   const [userName, setUserName] = useState('');
   const [otpMode, setOtpMode] = useState('login');
   const [loading, setLoading] = useState(false);
   const [timeLeft, setTimeLeft] = useState(120);
   const [failedLoginInfo, setFailedLoginInfo] = useState(null);
+
+  const setStep = (newStep) => { animateLayout(); setStepState(newStep); };
+  const setPassword = (val) => { animateLayout(); setPasswordState(val); };
+  const setMessage = (msg) => { animateLayout(); setMessageState(msg); };
+  const setError = (err) => { animateLayout(); setErrorState(err); };
 
   const { score: pwdScore, rules: pwdRules } = calcPasswordStrength(password);
   const isPasswordValid = pwdRules.length && pwdRules.uppercase && pwdRules.number && pwdRules.special;
@@ -179,10 +197,10 @@ const AuthScreen = ({ onAuthSuccess }) => {
     <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
       <View style={styles.card}>
         {/* Header */}
-        <View style={styles.headerBox}>
-          <Text style={styles.shieldIcon}>🛡️</Text>
-          <Text style={styles.appTitle}>TokerBank Mobil</Text>
-          <Text style={styles.appSubtitle}>Enterprise Auth & AI Fraud Shield</Text>
+        <View style={[styles.headerBox, step === 'register' && { marginBottom: 12 }]}>
+          <Text style={[styles.shieldIcon, step === 'register' && { fontSize: 32, marginBottom: 4 }]}>🛡️</Text>
+          <Text style={[styles.appTitle, step === 'register' && { fontSize: 20 }]}>TokerBank Mobil</Text>
+          {step !== 'register' && <Text style={styles.appSubtitle}>Enterprise Auth & AI Fraud Shield</Text>}
         </View>
 
         {message ? (
@@ -242,19 +260,24 @@ const AuthScreen = ({ onAuthSuccess }) => {
         {/* Step 2b: Kayıt */}
         {step === 'register' && (
           <View style={globalStyles.inputGroup}>
-            <Text style={styles.stepInfo}>
+            <Text style={[styles.stepInfo, { marginBottom: 10 }]}>
               <Text style={{ color: colors.primary }}>{email}</Text> ile yeni hesap oluşturun:
             </Text>
 
-            <Text style={globalStyles.label}>AD</Text>
-            <TextInput style={globalStyles.input} placeholder="Adınız"
-              placeholderTextColor={colors.textDim} value={firstName} onChangeText={setFirstName} />
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={globalStyles.label}>AD</Text>
+                <TextInput style={globalStyles.input} placeholder="Adınız"
+                  placeholderTextColor={colors.textDim} value={firstName} onChangeText={setFirstName} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={globalStyles.label}>SOYAD</Text>
+                <TextInput style={globalStyles.input} placeholder="Soyadınız"
+                  placeholderTextColor={colors.textDim} value={lastName} onChangeText={setLastName} />
+              </View>
+            </View>
 
-            <Text style={[globalStyles.label, { marginTop: 12 }]}>SOYAD</Text>
-            <TextInput style={globalStyles.input} placeholder="Soyadınız"
-              placeholderTextColor={colors.textDim} value={lastName} onChangeText={setLastName} />
-
-            <Text style={[globalStyles.label, { marginTop: 12 }]}>ŞİFRE OLUŞTUR</Text>
+            <Text style={[globalStyles.label, { marginTop: 10 }]}>ŞİFRE OLUŞTUR</Text>
             <View style={styles.passwordWrapper}>
               <TextInput
                 style={[globalStyles.input, { paddingRight: 44 }]}
@@ -281,14 +304,14 @@ const AuthScreen = ({ onAuthSuccess }) => {
                 <Text style={[styles.strengthLabel, { color: STRENGTH_COLORS[pwdScore] }]}>
                   {STRENGTH_LABELS[pwdScore]}
                 </Text>
-                <View style={styles.rulesBox}>
+                <View style={[styles.rulesBox, { flexDirection: 'row', flexWrap: 'wrap' }]}>
                   {[
-                    [pwdRules.length, 'En az 8 karakter'],
-                    [pwdRules.uppercase, 'En az 1 büyük harf'],
-                    [pwdRules.number, 'En az 1 rakam'],
-                    [pwdRules.special, 'En az 1 özel karakter (!@#$...)'],
+                    [pwdRules.length, 'En az 8 kr.'],
+                    [pwdRules.uppercase, '1 Büyük harf'],
+                    [pwdRules.number, '1 Rakam'],
+                    [pwdRules.special, '1 Özel kar. (!@#$)'],
                   ].map(([ok, label]) => (
-                    <Text key={label} style={[styles.ruleItem, { color: ok ? colors.success : colors.textDim }]}>
+                    <Text key={label} style={[styles.ruleItem, { width: '48%', color: ok ? colors.success : colors.textDim, fontSize: 11 }]}>
                       {ok ? '✓' : '✗'} {label}
                     </Text>
                   ))}
@@ -296,7 +319,7 @@ const AuthScreen = ({ onAuthSuccess }) => {
               </View>
             )}
 
-            <Text style={[globalStyles.label, { marginTop: 12 }]}>ŞİFRE TEKRAR</Text>
+            <Text style={[globalStyles.label, { marginTop: 10 }]}>ŞİFRE TEKRAR</Text>
             <View style={styles.passwordWrapper}>
               <TextInput
                 style={[globalStyles.input, { paddingRight: 44 },
@@ -316,7 +339,7 @@ const AuthScreen = ({ onAuthSuccess }) => {
             )}
 
             <TouchableOpacity
-              style={[globalStyles.btnPrimary, { marginTop: 20 },
+              style={[globalStyles.btnPrimary, { marginTop: 14 },
                 (!isPasswordValid || password !== confirmPassword || !firstName || !lastName)
                   ? { opacity: 0.5 } : null]}
               onPress={handleRegister}
@@ -324,9 +347,11 @@ const AuthScreen = ({ onAuthSuccess }) => {
             >
               {loading ? <ActivityIndicator color="#090D16" /> : <Text style={globalStyles.btnPrimaryText}>Kayıt Ol ➔</Text>}
             </TouchableOpacity>
-            <TouchableOpacity style={{ marginTop: 12, alignItems: 'center' }} onPress={resetForm}>
+            <TouchableOpacity style={{ marginTop: 10, alignItems: 'center' }} onPress={resetForm}>
               <Text style={{ color: colors.textMuted, fontSize: 13 }}>← Geri Dön</Text>
             </TouchableOpacity>
+          </View>
+        )}
           </View>
         )}
 
