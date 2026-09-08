@@ -4,13 +4,33 @@
     "slug": "tokerbank-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "light",
+    "icon": "./src/assets/tokerbank logo.png",
+    "splash": {
+      "image": "./src/assets/tokerbank android loading screen.png",
+      "resizeMode": "cover",
+      "backgroundColor": "#e6e7e8"
+    },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.tokerbank.mobile"
+      "bundleIdentifier": "com.tokerbank.mobile",
+      "splash": {
+        "image": "./src/assets/tokerbank android loading screen.png",
+        "resizeMode": "cover",
+        "backgroundColor": "#e6e7e8"
+      }
     },
     "android": {
-      "package": "com.tokerbank.mobile"
+      "package": "com.tokerbank.mobile",
+      "adaptiveIcon": {
+        "foregroundImage": "./src/assets/tokerbank logo.png",
+        "backgroundColor": "#e6e7e8"
+      },
+      "splash": {
+        "image": "./src/assets/tokerbank android loading screen.png",
+        "resizeMode": "cover",
+        "backgroundColor": "#e6e7e8"
+      }
     }
   }
 }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Animated, TouchableOpacity, Image } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import AuthScreen from './src/screens/AuthScreen';
 import DashboardOverviewScreen from './src/screens/DashboardOverviewScreen';
@@ -56,9 +56,17 @@ const FailedLoginToast = ({ info, onDismiss }) => {
 };
 
 export default function App() {
+  const [isInitializing, setIsInitializing] = useState(true);
   const [user, setUser] = useState(null); // { email, userName }
   const [activeTab, setActiveTab] = useState('overview');
   const [failedLoginInfo, setFailedLoginInfo] = useState(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsInitializing(false);
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleLogout = () => {
     setUser(null);
@@ -70,6 +78,18 @@ export default function App() {
     setUser({ email, userName });
     if (fli) setFailedLoginInfo(fli);
   };
+
+  if (isInitializing) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
+        <Image
+          source={require('./src/assets/tokerbank android loading screen.png')}
+          style={{ width: '100%', height: '100%', resizeMode: 'cover' }}
+        />
+      </View>
+    );
+  }
 
   if (!user) {
     return (

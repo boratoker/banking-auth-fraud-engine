@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { checkEmail, login, verifyPassword, register, verifyOtp } from './api/authApi';
 import MainDashboardView from './view/MainDashboardView';
+import tokerbankLogo from './assets/tokerbank-logo.png';
 import './App.css';
 
 // Şifre güç ölçer hesaplama
@@ -122,51 +123,60 @@ function App() {
     } finally { setLoading(false); }
   };
 
-  // Step 1: Şifre doğrulama (İlk Giriş Ekranı)
+  // Step 1: Şifre doğrulama (İlk Giriş Ekranı - Asenkron Anında Geçiş)
   const handleVerifyPassword = async (e) => {
-    e.preventDefault();
-    setMessage(''); setError(''); setLoading(true);
+    if (e) e.preventDefault();
+    if (!email || !password) return;
+
+    setError('');
+    setMessage('Şifre doğrulanıyor ve doğrulama kodu gönderiliyor...');
+    setOtpMode('login');
+    setTimeLeft(120);
+    setOtp('');
+    setStep('login-otp');
+
     try {
       const res = await verifyPassword(email, password);
-      setMessage(res.data.message);
+      setMessage(res.data.message || 'Şifre doğrulandı. OTP kodunuz e-posta adresinize gönderildi.');
       setUserName(res.data.firstName || '');
       if (res.data.lastFailedLoginAt) {
         setFailedLoginInfo(res.data.lastFailedLoginAt);
       } else {
         setFailedLoginInfo(null);
       }
-      setOtpMode('login');
-      setTimeLeft(120);
-      setOtp('');
       setPassword('');
-      setStep('login-otp');
     } catch (err) {
       if (err.response?.status === 404 || err.response?.data?.userNotFound) {
         setMessage(`${email} adresi ile kayıtlı kullanıcı bulunamadı. Lütfen yeni hesap oluşturun.`);
         setStep('register');
       } else {
-        setError(err.response?.data?.error || 'Şifre doğrulanamadı.');
+        setError(err.response?.data?.error || 'Şifre yanlış veya doğrulanamadı.');
+        setStep('login');
       }
-    } finally { setLoading(false); }
+    }
   };
 
-  // Step 2b: Register
+  // Step 2b: Register (Asenkron Anında Geçiş)
   const handleRegister = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     if (!isPasswordValid) { setError('Şifre tüm güvenlik kurallarını karşılamalıdır.'); return; }
     if (password !== confirmPassword) { setError('Şifreler eşleşmiyor.'); return; }
-    setMessage(''); setError(''); setLoading(true);
+
+    setError('');
+    setMessage('Hesap oluşturuluyor ve doğrulama kodu gönderiliyor...');
+    setOtpMode('register');
+    setTimeLeft(120);
+    setOtp('');
+    setStep('register-otp');
+
     try {
       const res = await register(email, firstName, lastName, password);
-      setMessage(res.data.message);
-      setOtpMode('register');
-      setTimeLeft(120);
-      setOtp('');
+      setMessage(res.data.message || 'Kayıt başarılı! Doğrulama kodu e-postanıza gönderildi.');
       setPassword('');
-      setStep('register-otp');
     } catch (err) {
-      setError(err.response?.data?.error || err.message);
-    } finally { setLoading(false); }
+      setError(err.response?.data?.error || err.message || 'Kayıt talebi başarısız.');
+      setStep('register');
+    }
   };
 
   // Resend OTP
@@ -221,8 +231,8 @@ function App() {
         }}
       >
         <div ref={cardInnerRef} style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <div className="login-brand" style={step === 'register' ? { marginBottom: '12px' } : {}}>
-            <span className="login-brand-icon" style={step === 'register' ? { fontSize: '28px' } : {}}>🛡️</span>
+          <div className="login-brand" style={step === 'register' ? { marginBottom: '10px' } : {}}>
+            <img src={tokerbankLogo} alt="TokerBank Logo" style={{ width: step === 'register' ? '42px' : '60px', height: 'auto', marginBottom: '6px' }} />
             <h2 className="login-title" style={step === 'register' ? { fontSize: '20px', marginBottom: '8px' } : {}}>TokerBank Digital</h2>
             {step !== 'register' && <p className="login-subtitle">Enterprise Auth &amp; AI Fraud Shield</p>}
           </div>

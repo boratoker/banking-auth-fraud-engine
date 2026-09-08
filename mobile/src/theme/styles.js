@@ -70,7 +70,7 @@ export const globalStyles = StyleSheet.create({
     elevation: 5,
   },
   btnPrimaryText: {
-    color: '#090D16',
+    color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 15,
   },

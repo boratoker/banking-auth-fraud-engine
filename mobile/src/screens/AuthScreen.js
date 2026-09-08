@@ -11,14 +11,11 @@ import {
   LayoutAnimation,
   Platform,
   UIManager,
+  Image,
 } from 'react-native';
 import { checkEmail, login, verifyPassword, register, verifyOtp } from '../api/authApi';
 import { colors } from '../theme/colors';
 import { globalStyles } from '../theme/styles';
-
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 
 const animateLayout = () => {
   try {
@@ -114,51 +111,59 @@ const AuthScreen = ({ onAuthSuccess }) => {
     } finally { setLoading(false); }
   };
 
-  // Step 2a: Şifre doğrulama
+  // Step 2a: Şifre doğrulama (Asenkron Anında Geçiş)
   const handleVerifyPassword = async () => {
-    if (!password) { setError('Şifrenizi giriniz.'); return; }
-    setMessage(''); setError(''); setLoading(true);
+    if (!password || !email) { setError('Lütfen e-posta ve şifrenizi giriniz.'); return; }
+
+    setError('');
+    setMessage('Şifre doğrulanıyor ve doğrulama kodu gönderiliyor...');
+    setOtpMode('login');
+    setTimeLeft(120);
+    setOtp('');
+    setStep('login-otp');
+
     try {
       const res = await verifyPassword(email, password);
-      setMessage(res.data.message);
+      setMessage(res.data.message || 'Şifre doğrulandı. OTP kodunuz e-posta adresinize gönderildi.');
       setUserName(res.data.firstName || '');
       if (res.data.lastFailedLoginAt) {
         setFailedLoginInfo(res.data.lastFailedLoginAt);
       } else {
         setFailedLoginInfo(null);
       }
-      setOtpMode('login');
-      setTimeLeft(120);
-      setOtp('');
       setPassword('');
-      setStep('login-otp');
     } catch (err) {
       if (err.response?.status === 404 || err.response?.data?.userNotFound) {
         setMessage(`${email} adresi ile kayıtlı kullanıcı bulunamadı. Lütfen yeni hesap oluşturun.`);
         setStep('register');
       } else {
-        setError(err.response?.data?.error || 'Şifre doğrulanamadı.');
+        setError(err.response?.data?.error || 'Şifre yanlış veya doğrulanamadı.');
+        setStep('login');
       }
-    } finally { setLoading(false); }
+    }
   };
 
-  // Step 2b: Kayıt
+  // Step 2b: Kayıt (Asenkron Anında Geçiş)
   const handleRegister = async () => {
     if (!firstName || !lastName) { setError('Ad ve soyadı doldurunuz.'); return; }
     if (!isPasswordValid) { setError('Şifre tüm güvenlik kurallarını karşılamalıdır.'); return; }
     if (password !== confirmPassword) { setError('Şifreler eşleşmiyor.'); return; }
-    setMessage(''); setError(''); setLoading(true);
+
+    setError('');
+    setMessage('Hesap oluşturuluyor ve doğrulama kodu gönderiliyor...');
+    setOtpMode('register');
+    setTimeLeft(120);
+    setOtp('');
+    setStep('register-otp');
+
     try {
       const res = await register(email, firstName, lastName, password);
-      setMessage(res.data.message);
-      setOtpMode('register');
-      setTimeLeft(120);
-      setOtp('');
+      setMessage(res.data.message || 'Kayıt başarılı! Doğrulama kodu gönderildi.');
       setPassword('');
-      setStep('register-otp');
     } catch (err) {
       setError(err.response?.data?.error || 'Kayıt talebi başarısız.');
-    } finally { setLoading(false); }
+      setStep('register');
+    }
   };
 
   // Resend OTP
@@ -197,8 +202,11 @@ const AuthScreen = ({ onAuthSuccess }) => {
     <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
       <View style={styles.card}>
         {/* Header */}
-        <View style={[styles.headerBox, step === 'register' && { marginBottom: 12 }]}>
-          <Text style={[styles.shieldIcon, step === 'register' && { fontSize: 32, marginBottom: 4 }]}>🛡️</Text>
+        <View style={[styles.headerBox, step === 'register' && { marginBottom: 10 }]}>
+          <Image
+            source={require('../assets/tokerbank logo.png')}
+            style={{ width: step === 'register' ? 44 : 64, height: step === 'register' ? 44 : 64, resizeMode: 'contain', marginBottom: 6 }}
+          />
           <Text style={[styles.appTitle, step === 'register' && { fontSize: 20 }]}>TokerBank Mobil</Text>
           {step !== 'register' && <Text style={styles.appSubtitle}>Enterprise Auth & AI Fraud Shield</Text>}
         </View>
@@ -243,7 +251,7 @@ const AuthScreen = ({ onAuthSuccess }) => {
               onPress={handleVerifyPassword}
               disabled={loading || !password || !email}
             >
-              {loading ? <ActivityIndicator color="#090D16" /> : <Text style={globalStyles.btnPrimaryText}>Giriş Yap ➔</Text>}
+              {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={globalStyles.btnPrimaryText}>Giriş Yap ➔</Text>}
             </TouchableOpacity>
             
             <View style={{ marginTop: 20, alignItems: 'center' }}>
@@ -345,7 +353,7 @@ const AuthScreen = ({ onAuthSuccess }) => {
               onPress={handleRegister}
               disabled={loading || !isPasswordValid || password !== confirmPassword || !firstName || !lastName}
             >
-              {loading ? <ActivityIndicator color="#090D16" /> : <Text style={globalStyles.btnPrimaryText}>Kayıt Ol ➔</Text>}
+              {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={globalStyles.btnPrimaryText}>Kayıt Ol ➔</Text>}
             </TouchableOpacity>
             <TouchableOpacity style={{ marginTop: 10, alignItems: 'center' }} onPress={resetForm}>
               <Text style={{ color: colors.textMuted, fontSize: 13 }}>← Geri Dön</Text>
@@ -374,7 +382,7 @@ const AuthScreen = ({ onAuthSuccess }) => {
             />
             <TouchableOpacity style={[globalStyles.btnPrimary, { marginTop: 16 }]}
               onPress={handleOtpSubmit} disabled={loading || timeLeft === 0}>
-              {loading ? <ActivityIndicator color="#090D16" /> : <Text style={globalStyles.btnPrimaryText}>Giriş Yap</Text>}
+              {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={globalStyles.btnPrimaryText}>Giriş Yap</Text>}
             </TouchableOpacity>
             <TouchableOpacity style={globalStyles.btnSecondary} onPress={handleResendOtp} disabled={loading}>
               <Text style={globalStyles.btnSecondaryText}>Kodu Tekrar Gönder</Text>
@@ -405,7 +413,7 @@ const AuthScreen = ({ onAuthSuccess }) => {
             />
             <TouchableOpacity style={[globalStyles.btnPrimary, { marginTop: 16 }]}
               onPress={handleOtpSubmit} disabled={loading || timeLeft === 0}>
-              {loading ? <ActivityIndicator color="#090D16" /> : <Text style={globalStyles.btnPrimaryText}>Doğrula ve Tamamla</Text>}
+              {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={globalStyles.btnPrimaryText}>Doğrula ve Tamamla</Text>}
             </TouchableOpacity>
             <TouchableOpacity style={globalStyles.btnSecondary} onPress={handleResendOtp} disabled={loading}>
               <Text style={globalStyles.btnSecondaryText}>Kodu Tekrar Gönder</Text>
