@@ -31,7 +31,7 @@ public class AuthController {
 
     private static final Logger log = LoggerFactory.getLogger(AuthController.class);
     private static final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
-    private static final DateTimeFormatter DT_FORMAT = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
+    private static final DateTimeFormatter DT_FORMAT = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss");
 
     @Autowired(required = false)
     private StringRedisTemplate redisTemplate;
@@ -77,7 +77,10 @@ public class AuthController {
         Optional<User> userOpt = userRepository.findByEmail(email);
 
         if (userOpt.isEmpty()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Bu e-posta ile kayıtlı kullanıcı bulunamadı."));
+            return ResponseEntity.status(404).body(Map.of(
+                "error", "Bu e-posta ile kayıtlı kullanıcı bulunamadı.",
+                "userNotFound", true
+            ));
         }
 
         User user = userOpt.get();
@@ -109,7 +112,10 @@ public class AuthController {
         Optional<User> userOpt = userRepository.findByEmail(email);
 
         if (userOpt.isEmpty()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Kullanıcı bulunamadı."));
+            return ResponseEntity.status(404).body(Map.of(
+                "error", "Kullanıcı bulunamadı.",
+                "userNotFound", true
+            ));
         }
 
         User user = userOpt.get();
@@ -133,6 +139,11 @@ public class AuthController {
         String lastFailedAt = user.getLastFailedLoginAt() != null
             ? user.getLastFailedLoginAt().format(DT_FORMAT)
             : null;
+
+        if (user.getLastFailedLoginAt() != null) {
+            user.setLastFailedLoginAt(null);
+            userRepository.save(user);
+        }
 
         return ResponseEntity.ok(Map.of(
             "message", "Şifre doğrulandı. OTP kodunuz " + maskEmail(email) + " adresine gönderildi.",

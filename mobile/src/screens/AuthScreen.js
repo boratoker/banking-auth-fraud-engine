@@ -104,14 +104,23 @@ const AuthScreen = ({ onAuthSuccess }) => {
       const res = await verifyPassword(email, password);
       setMessage(res.data.message);
       setUserName(res.data.firstName || '');
-      if (res.data.lastFailedLoginAt) setFailedLoginInfo(res.data.lastFailedLoginAt);
+      if (res.data.lastFailedLoginAt) {
+        setFailedLoginInfo(res.data.lastFailedLoginAt);
+      } else {
+        setFailedLoginInfo(null);
+      }
       setOtpMode('login');
       setTimeLeft(120);
       setOtp('');
       setPassword('');
       setStep('login-otp');
     } catch (err) {
-      setError(err.response?.data?.error || 'Şifre doğrulanamadı.');
+      if (err.response?.status === 404 || err.response?.data?.userNotFound) {
+        setMessage(`${email} adresi ile kayıtlı kullanıcı bulunamadı. Lütfen yeni hesap oluşturun.`);
+        setStep('register');
+      } else {
+        setError(err.response?.data?.error || 'Şifre doğrulanamadı.');
+      }
     } finally { setLoading(false); }
   };
 
