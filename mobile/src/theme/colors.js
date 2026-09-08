@@ -1,0 +1,18 @@
+export const colors = {
+  background: '#0B0F19',
+  cardBg: 'rgba(23, 31, 51, 0.85)',
+  cardBorder: 'rgba(255, 255, 255, 0.1)',
+  primary: '#00F2FE',
+  primaryDark: '#00B4D8',
+  secondary: '#4FACFE',
+  success: '#00E676',
+  warning: '#FF9100',
+  danger: '#FF5252',
+  text: '#F8FAFC',
+  textMuted: '#94A3B8',
+  textDim: '#64748B',
+  inputBg: 'rgba(15, 23, 42, 0.6)',
+  inputBorder: 'rgba(255, 255, 255, 0.15)',
+  badgeBg: 'rgba(0, 242, 254, 0.12)',
+  badgeBorder: 'rgba(0, 242, 254, 0.3)',
+};

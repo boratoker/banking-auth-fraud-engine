@@ -138,11 +138,20 @@ cd backend/auth-service
 mvn spring-boot:run
 ```
 
-### 3. Frontend Dev Sunucusunu Çalıştırın
+### 3. Web Frontend Dev Sunucusunu Çalıştırın
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
-
 Tarayıcınızdan **`http://localhost:5173`** adresine giderek uygulamayı kullanmaya başlayabilirsiniz!
+
+### 4. Mobil Ön Yüz (React Native / Expo) Sunucusunu Çalıştırın
+```bash
+cd mobile
+npm install
+npm run web   # Mobil simülatörü tarayıcıda çalıştırmak için (http://localhost:5174)
+# veya
+npm start     # Expo CLI ile mobil cihaz / iOS & Android simülatöründe çalıştırmak için
+```
+

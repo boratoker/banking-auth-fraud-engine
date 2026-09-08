@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>TokerBank Mobile App</title>
+    <style>
+      html, body, #root {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        background-color: #0B0F19;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        overflow: hidden;
+      }
+      /* Simulator Container Styling on Desktop browsers */
+      @media (min-width: 600px) {
+        body {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          background: radial-gradient(circle at center, #1E293B 0%, #0B0F19 100%);
+        }
+        #root {
+          width: 414px;
+          height: 844px;
+          border-radius: 40px;
+          border: 12px solid #1f293d;
+          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7), 0 0 30px rgba(0, 242, 254, 0.15);
+          overflow: hidden;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/index.js"></script>
+  </body>
+</html>
