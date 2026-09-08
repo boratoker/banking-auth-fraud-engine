@@ -1,6 +1,20 @@
 version: '3.8'
 
 services:
+  # 0. PostgreSQL - Primary Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: banking-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: banking_auth
+      POSTGRES_USER: banking
+      POSTGRES_PASSWORD: Balkancan19*
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+
   # 1. Redis - Caching & Rate Limiting
   redis:
     image: redis:7-alpine
@@ -8,6 +22,7 @@ services:
     ports:
       - "6379:6379"
     restart: always
+
 
   # 2. RabbitMQ - Asynchronous Messaging
   rabbitmq:
@@ -67,3 +82,6 @@ services:
     depends_on:
       - prometheus
     restart: always
+
+volumes:
+  postgres_data:
