@@ -352,8 +352,6 @@ const AuthScreen = ({ onAuthSuccess }) => {
             </TouchableOpacity>
           </View>
         )}
-          </View>
-        )}
 
         {/* Step 3a: Login OTP */}
         {step === 'login-otp' && (
