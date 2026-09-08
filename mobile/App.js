@@ -75,7 +75,7 @@ export default function App() {
     return (
       <SafeAreaProvider>
         <SafeAreaView style={styles.container}>
-          <StatusBar barStyle="light-content" backgroundColor={colors.background} />
+          <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
           <AuthScreen onAuthSuccess={handleAuthSuccess} />
         </SafeAreaView>
       </SafeAreaProvider>
@@ -85,7 +85,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={colors.background} />
+        <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
         <Header userName={user.userName} email={user.email} onLogout={handleLogout} />
 
         <View style={styles.screenContainer}>

@@ -249,7 +249,7 @@ const AuthScreen = ({ onAuthSuccess }) => {
             <View style={{ marginTop: 20, alignItems: 'center' }}>
               <TouchableOpacity 
                 onPress={() => { resetForm(); setStep('register'); }} 
-                style={{ backgroundColor: '#007BFF', paddingVertical: 12, paddingHorizontal: 32, borderRadius: 8, width: '100%', alignItems: 'center' }}
+                style={{ backgroundColor: '#db002b', paddingVertical: 12, paddingHorizontal: 32, borderRadius: 8, width: '100%', alignItems: 'center' }}
               >
                 <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: 'bold' }}>Kayıt Ol</Text>
               </TouchableOpacity>

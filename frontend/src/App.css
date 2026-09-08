@@ -18,7 +18,7 @@
 
 .login-card {
   width: 100%;
-  background: var(--bg);
+  background: #ffffff;
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 32px 28px;
@@ -129,8 +129,8 @@
 }
 
 .form-input:focus {
-  border-color: #0056b3;
-  box-shadow: 0 0 0 3px rgba(0, 86, 179, 0.15);
+  border-color: #db002b;
+  box-shadow: 0 0 0 3px rgba(219, 0, 43, 0.15);
 }
 
 .form-input.otp-input {
@@ -166,12 +166,12 @@
 }
 
 .btn-primary {
-  background: #0056b3;
+  background: #db002b;
   color: #ffffff;
 }
 
 .btn-primary:hover {
-  background: #004494;
+  background: #b80024;
 }
 
 .btn-success {
@@ -433,7 +433,7 @@
 .brand-subtitle {
   font-size: 11px;
   font-weight: 600;
-  color: #0056b3;
+  color: #db002b;
   text-transform: uppercase;
   letter-spacing: 0.8px;
 }
@@ -464,7 +464,7 @@
 }
 
 .navbar-search .search-input:focus {
-  border-color: #0056b3;
+  border-color: #db002b;
   background: var(--bg);
 }
 
@@ -532,7 +532,7 @@
 .user-avatar {
   width: 38px;
   height: 38px;
-  background: linear-gradient(135deg, #0056b3, #aa3bff);
+  background: linear-gradient(135deg, #db002b, #800019);
   color: #ffffff;
   border-radius: 50%;
   display: flex;
@@ -624,10 +624,10 @@
 }
 
 .sidebar-item.active {
-  background: #0056b3;
+  background: #db002b;
   color: #ffffff;
   font-weight: 600;
-  box-shadow: 0 4px 12px rgba(0, 86, 179, 0.25);
+  box-shadow: 0 4px 12px rgba(219, 0, 43, 0.25);
 }
 
 .sidebar-icon {
@@ -700,14 +700,14 @@
 
 /* Welcome Banner */
 .welcome-banner {
-  background: linear-gradient(135deg, #0d1b2a, #1b263b);
+  background: linear-gradient(135deg, #111827, #db002b);
   color: #ffffff;
   padding: 28px;
   border-radius: 20px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 10px 25px rgba(219, 0, 43, 0.2);
 }
 
 .welcome-text h1 {
@@ -757,7 +757,7 @@
 }
 
 .metric-card.primary {
-  border-left: 4px solid #0056b3;
+  border-left: 4px solid #db002b;
 }
 
 .card-header {
@@ -820,7 +820,7 @@
 
 .progress-bar-fill {
   height: 100%;
-  background: #0056b3;
+  background: #db002b;
   border-radius: 3px;
 }
 

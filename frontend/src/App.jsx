@@ -263,7 +263,7 @@ function App() {
               <button 
                 type="button" 
                 style={{ 
-                  background: '#007BFF', border: 'none', color: '#FFFFFF', 
+                  background: '#db002b', border: 'none', color: '#FFFFFF', 
                   fontSize: '15px', fontWeight: 'bold', cursor: 'pointer', 
                   padding: '12px 24px', borderRadius: '8px'
                 }}
