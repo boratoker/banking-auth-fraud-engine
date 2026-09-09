@@ -11,18 +11,9 @@ import { getTransactions } from '../api/bankingApi';
 import { colors } from '../theme/colors';
 import { globalStyles } from '../theme/styles';
 
-const initialTxList = [
-  { id: 1, title: 'Migros Sanal Market', type: 'EXPENSE', amount: -420.5, category: 'Alışveriş', date: 'Bugün, 14:20' },
-  { id: 2, title: 'Ahmet Yılmaz - FAST Transfer', type: 'TRANSFER', amount: -1500.0, category: 'Transfer', date: 'Dün, 18:45' },
-  { id: 3, title: 'Maaş Ödemesi (Tech Corp)', type: 'INCOME', amount: +48500.0, category: 'Maaş/Gelir', date: '01.09.2026' },
-  { id: 4, title: 'Netflix Dijital Abonelik', type: 'EXPENSE', amount: -199.99, category: 'Abonelik', date: '28.08.2026' },
-  { id: 5, title: 'Bora Toker - Vadeli Birikim', type: 'TRANSFER', amount: +12500.0, category: 'Yatırım', date: '25.08.2026' },
-  { id: 6, title: 'Shell Petrol A.Ş.', type: 'EXPENSE', amount: -850.0, category: 'Akaryakıt', date: '22.08.2026' },
-];
-
 const TransactionsScreen = () => {
   const [filter, setFilter] = useState('ALL'); // 'ALL' | 'INCOME' | 'EXPENSE' | 'TRANSFER'
-  const [transactions, setTransactions] = useState(initialTxList);
+  const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {

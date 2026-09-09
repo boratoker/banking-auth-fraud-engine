@@ -14,16 +14,11 @@ import { globalStyles } from '../theme/styles';
 
 const DashboardOverviewScreen = ({ onNavigate }) => {
   const [data, setData] = useState({
-    totalBalance: 235051.25,
+    totalBalance: 0,
     currency: 'TRY',
-    activeCards: 2,
-    riskStatus: 'GÜVENLİ (%2 Risk)',
-    recentTransactions: [
-      { id: 1, title: 'Migros Sanal Market', type: 'EXPENSE', amount: -420.5, date: 'Bugün, 14:20' },
-      { id: 2, title: 'Ahmet Yılmaz - FAST Transfer', type: 'TRANSFER', amount: -1500.0, date: 'Dün, 18:45' },
-      { id: 3, title: 'Maaş Ödemesi (Tech Corp)', type: 'INCOME', amount: +48500.0, date: '01.09.2026' },
-      { id: 4, title: 'Netflix Dijital Abonelik', type: 'EXPENSE', amount: -199.99, date: '28.08.2026' },
-    ],
+    activeCards: 0,
+    riskStatus: 'Veri Bekleniyor',
+    recentTransactions: [],
   });
   const [loading, setLoading] = useState(false);
 

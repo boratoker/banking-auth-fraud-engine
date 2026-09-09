@@ -41,3 +41,7 @@ export const terminateSession = async (id) => {
 export const getTransactions = async () => {
   return await apiClient.get(`${BANKING_PREFIX}/transactions`);
 };
+
+export const getContacts = async () => {
+  return await apiClient.get(`${BANKING_PREFIX}/contacts`);
+};

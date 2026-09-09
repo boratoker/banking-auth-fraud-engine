@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { submitTransfer, verifyTransferOtp } from '../api/bankingApi';
+import React, { useState, useEffect } from 'react';
+import { submitTransfer, verifyTransferOtp, getContacts } from '../api/bankingApi';
 import tokerbankLogo from '../assets/tokerbank-logo.png';
 
 const TransferView = () => {
@@ -47,7 +47,8 @@ const TransferView = () => {
           reason: data.reason || 'Yüksek tutarlı transfer (₺10,000+) ve ek güvenlik kuralı.',
           amount: numericAmount,
           recipient: recipientName || 'Alıcı',
-          iban: recipientIban
+          iban: recipientIban,
+          transactionId: data.transactionId
         });
         setShowFraudModal(true);
       } else {
@@ -68,7 +69,8 @@ const TransferView = () => {
           reason: 'Yüksek tutarlı transfer (₺10,000+) ve daha önce işlem yapılmamış yeni IBAN.',
           amount: numericAmount,
           recipient: recipientName || 'Alıcı',
-          iban: recipientIban
+          iban: recipientIban,
+          transactionId: null // API failure fallback
         });
         setShowFraudModal(true);
       } else {
@@ -90,8 +92,7 @@ const TransferView = () => {
     try {
       const res = await verifyTransferOtp({
         otp: modalOtpInput,
-        amount: fraudModalData.amount,
-        recipient: fraudModalData.recipient
+        transactionId: fraudModalData.transactionId
       });
 
       setShowFraudModal(false);
@@ -116,11 +117,17 @@ const TransferView = () => {
     }
   };
 
-  const savedContacts = [
-    { name: 'Ahmet Yılmaz', iban: 'TR32 0006 1000 0000 5544 3322 11' },
-    { name: 'Ayşe Kaya', iban: 'TR32 0006 1000 0000 9988 7766 55' },
-    { name: 'Mehmet Demir', iban: 'TR32 0006 1000 0000 1111 2222 33' },
-  ];
+  const [savedContacts, setSavedContacts] = useState([]);
+
+  useEffect(() => {
+    getContacts()
+      .then(res => {
+        if (Array.isArray(res.data)) {
+          setSavedContacts(res.data);
+        }
+      })
+      .catch(err => console.error('Failed to fetch contacts', err));
+  }, []);
 
   return (
     <div className="view-container transfer-view">
@@ -271,7 +278,7 @@ const TransferView = () => {
               </div>
 
               <div className="form-group" style={{ marginTop: '16px' }}>
-                <label className="form-label">SMS 6-Haneli Doğrulama Kodu</label>
+                <label className="form-label">E-posta 6-Haneli Doğrulama Kodu</label>
                 <input
                   type="text"
                   className="form-input otp-input"

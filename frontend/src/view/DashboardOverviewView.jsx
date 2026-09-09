@@ -6,12 +6,7 @@ const DashboardOverviewView = ({ userName, onNavigate }) => {
   const [showBalances, setShowBalances] = useState(true);
   const [overview, setOverview] = useState({
 
-    recentTransactions: [
-      { id: 1, title: 'Migros Sanal Market', date: 'Bugün, 14:22', amount: -482.50, category: 'Alışveriş', risk: 'Safe', riskScore: '1%' },
-      { id: 2, title: 'Gelen Transfer - Ahmet Yıl.', date: 'Bugün, 11:05', amount: 3500.00, category: 'FAST Transfer', risk: 'Safe', riskScore: '0%' },
-      { id: 3, title: 'Netflix Abonelik', date: 'Dün, 22:15', amount: -199.99, category: 'Eğlence', risk: 'Safe', riskScore: '2%' },
-      { id: 4, title: 'Shell Yakıt Alımı', date: '05 Eylül, 18:40', amount: -1250.00, category: 'Ulaşım', risk: 'Safe', riskScore: '3%' },
-    ]
+    recentTransactions: []
   });
 
   useEffect(() => {

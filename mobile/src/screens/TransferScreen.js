@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,18 +10,13 @@ import {
   Alert,
   Image,
 } from 'react-native';
-import { submitTransfer, verifyTransferOtp } from '../api/bankingApi';
+import { submitTransfer, verifyTransferOtp, getContacts } from '../api/bankingApi';
 import FraudModal from '../components/FraudModal';
 import { colors } from '../theme/colors';
 import { globalStyles } from '../theme/styles';
 
-const savedContacts = [
-  { name: 'Ahmet Yılmaz', iban: 'TR32 0006 1000 0000 5544 3322 11' },
-  { name: 'Ayşe Kaya', iban: 'TR32 0006 1000 0000 9988 7766 55' },
-  { name: 'Mehmet Demir', iban: 'TR32 0006 1000 0000 1111 2222 33' },
-];
-
 const TransferScreen = () => {
+  const [savedContacts, setSavedContacts] = useState([]);
   const [recipientIban, setRecipientIban] = useState('');
   const [recipientName, setRecipientName] = useState('');
   const [amount, setAmount] = useState('');
@@ -37,6 +32,16 @@ const TransferScreen = () => {
   const [showFraudModal, setShowFraudModal] = useState(false);
   const [fraudModalData, setFraudModalData] = useState(null);
   const [modalOtpInput, setModalOtpInput] = useState('');
+
+  useEffect(() => {
+    getContacts()
+      .then(res => {
+        if (Array.isArray(res.data)) {
+          setSavedContacts(res.data);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const handleTransferSubmit = async () => {
     if (!recipientIban || !recipientName || !amount) {
@@ -74,6 +79,7 @@ const TransferScreen = () => {
           amount: numericAmount,
           recipient: recipientName,
           iban: recipientIban,
+          transactionId: data.transactionId,
         });
         setShowFraudModal(true);
       } else {
@@ -90,6 +96,7 @@ const TransferScreen = () => {
           amount: numericAmount,
           recipient: recipientName,
           iban: recipientIban,
+          transactionId: null,
         });
         setShowFraudModal(true);
       } else {
@@ -109,8 +116,7 @@ const TransferScreen = () => {
     try {
       const res = await verifyTransferOtp({
         otp: modalOtpInput,
-        amount: fraudModalData.amount,
-        recipient: fraudModalData.recipient,
+        transactionId: fraudModalData.transactionId,
       });
 
       setShowFraudModal(false);

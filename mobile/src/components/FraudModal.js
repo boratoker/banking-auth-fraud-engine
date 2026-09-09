@@ -43,7 +43,7 @@ const FraudModal = ({ visible, fraudData, otpInput, setOtpInput, onClose, onConf
           </View>
 
           <View style={styles.inputSection}>
-            <Text style={styles.label}>SMS 6-Haneli Doğrulama Kodu</Text>
+            <Text style={styles.label}>E-posta 6-Haneli Doğrulama Kodu</Text>
             <TextInput
               style={styles.otpInput}
               placeholder="123456"

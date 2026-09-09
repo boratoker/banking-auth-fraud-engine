@@ -41,3 +41,7 @@ export const terminateSession = async (id) => {
 export const getTransactions = async () => {
   return await axios.get(`${API_BASE_URL}/transactions`);
 };
+
+export const getContacts = async () => {
+  return await axios.get(`${API_BASE_URL}/contacts`);
+};
