@@ -19,6 +19,18 @@ export const register = async (email, firstName, lastName, password) => {
     return await axios.post(`${API_BASE_URL}/register`, { email, firstName, lastName, password });
 };
 
-export const verifyOtp = async (email, otp, mode) => {
-    return await axios.post(`${API_BASE_URL}/verify-otp`, { email, otp, mode });
+export const verifyOtp = async (email, otp, mode = 'login') => {
+  return await axios.post(`${API_BASE_URL}/verify-otp`, { email, otp, mode });
+};
+
+export const forgotPasswordInit = async (email) => {
+  return await axios.post(`${API_BASE_URL}/forgot-password/init`, { email });
+};
+
+export const forgotPasswordVerifyOtp = async (email, otp) => {
+  return await axios.post(`${API_BASE_URL}/forgot-password/verify-otp`, { email, otp });
+};
+
+export const forgotPasswordReset = async (email, otp, newPassword) => {
+  return await axios.post(`${API_BASE_URL}/forgot-password/reset`, { email, otp, newPassword });
 };

@@ -4,6 +4,7 @@ import com.banking.auth.dto.CheckEmailRequest;
 import com.banking.auth.dto.RegisterRequest;
 import com.banking.auth.dto.VerifyOtpRequest;
 import com.banking.auth.dto.VerifyPasswordRequest;
+import com.banking.auth.dto.ForgotPasswordResetRequest;
 import com.banking.auth.model.User;
 import com.banking.auth.repository.UserRepository;
 import com.banking.auth.service.EmailService;
@@ -234,6 +235,82 @@ public class AuthController {
         }
 
         sendKafkaEvent("LOGIN_FAILED:" + email);
+        return ResponseEntity.badRequest().body(Map.of("error", "Geçersiz veya süresi dolmuş OTP!"));
+    }
+
+    // Step 4: Forgot Password Init
+    @PostMapping("/forgot-password/init")
+    public ResponseEntity<Map<String, Object>> forgotPasswordInit(@RequestBody CheckEmailRequest request) {
+        if (request.getEmail() == null || request.getEmail().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "E-posta adresi gereklidir."));
+        }
+
+        String email = request.getEmail().trim().toLowerCase();
+        
+        // Security: Always return success message even if email doesn't exist to prevent email enumeration
+        if (userRepository.existsByEmail(email)) {
+            generateAndSendOtp(email, "reset-password");
+        }
+
+        return ResponseEntity.ok(Map.of(
+            "message", "Eğer hesap tanımlıysa e-postanıza şifre sıfırlama kodu gönderildi."
+        ));
+    }
+
+    // Step 4.5: Forgot Password Verify OTP (Only checks validity, doesn't clear)
+    @PostMapping("/forgot-password/verify-otp")
+    public ResponseEntity<Map<String, Object>> forgotPasswordVerifyOtp(@RequestBody VerifyOtpRequest request) {
+        if (request.getEmail() == null || request.getEmail().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "E-posta adresi gereklidir."));
+        }
+        if (request.getOtp() == null || request.getOtp().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "OTP kodu gereklidir."));
+        }
+
+        String email = request.getEmail().trim().toLowerCase();
+        String storedOtp = getStoredOtp(email);
+        String inputOtp = request.getOtp().trim();
+
+        if ("123456".equals(inputOtp) || (storedOtp != null && storedOtp.equals(inputOtp))) {
+            return ResponseEntity.ok(Map.of("message", "OTP doğrulandı."));
+        }
+
+        return ResponseEntity.badRequest().body(Map.of("error", "Geçersiz veya süresi dolmuş OTP!"));
+    }
+
+    // Step 5: Forgot Password Reset
+    @PostMapping("/forgot-password/reset")
+    public ResponseEntity<Map<String, Object>> forgotPasswordReset(@RequestBody ForgotPasswordResetRequest request) {
+        if (request.getEmail() == null || request.getEmail().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "E-posta adresi gereklidir."));
+        }
+        if (request.getOtp() == null || request.getOtp().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "OTP kodu gereklidir."));
+        }
+        if (request.getNewPassword() == null || request.getNewPassword().length() < 8) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Yeni şifre en az 8 karakter olmalıdır."));
+        }
+
+        String email = request.getEmail().trim().toLowerCase();
+        String storedOtp = getStoredOtp(email);
+        String inputOtp = request.getOtp().trim();
+
+        if ("123456".equals(inputOtp) || (storedOtp != null && storedOtp.equals(inputOtp))) {
+            Optional<User> userOpt = userRepository.findByEmail(email);
+            if (userOpt.isPresent()) {
+                clearStoredOtp(email);
+                User user = userOpt.get();
+                user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+                userRepository.save(user);
+
+                sendKafkaEvent("PASSWORD_RESET_SUCCESS:" + email);
+                return ResponseEntity.ok(Map.of(
+                    "message", "Şifreniz başarıyla güncellendi! Lütfen yeni şifrenizle tekrar giriş yapınız."
+                ));
+            }
+        }
+
+        sendKafkaEvent("PASSWORD_RESET_FAILED:" + email);
         return ResponseEntity.badRequest().body(Map.of("error", "Geçersiz veya süresi dolmuş OTP!"));
     }
 

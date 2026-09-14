@@ -27,10 +27,25 @@ public class EmailService {
 
     public void sendOtpEmail(String toEmail, String otp, String mode) {
         boolean isRegister = "register".equalsIgnoreCase(mode);
-        String actionTitle = isRegister ? "TokerBank Yeni Hesap Kaydı" : "TokerBank Dijital Giriş";
-        String subject = isRegister 
-            ? "TokerBank Kayıt Ol - E-Posta Doğrulama Kodunuz: " + otp 
-            : "TokerBank Giriş Yap - Oturum Açma Kodunuz: " + otp;
+        boolean isResetPassword = "reset-password".equalsIgnoreCase(mode);
+        
+        String actionTitle;
+        if (isRegister) {
+            actionTitle = "TokerBank Yeni Hesap Kaydı";
+        } else if (isResetPassword) {
+            actionTitle = "TokerBank Parola Sıfırlama Talebi";
+        } else {
+            actionTitle = "TokerBank Dijital Giriş";
+        }
+
+        String subject;
+        if (isRegister) {
+            subject = "TokerBank Kayıt Ol - E-Posta Doğrulama Kodunuz: " + otp;
+        } else if (isResetPassword) {
+            subject = "TokerBank Parola Sıfırlama - Doğrulama Kodunuz: " + otp;
+        } else {
+            subject = "TokerBank Giriş Yap - Oturum Açma Kodunuz: " + otp;
+        }
 
         log.info("=================================================================");
         log.info("🔐 [{}] OTP DOĞRULAMA KODU: [{}]", actionTitle.toUpperCase(), otp);
@@ -55,9 +70,14 @@ public class EmailService {
             helper.setTo(toEmail);
             helper.setSubject(subject);
 
-            String bodyText = isRegister 
-                ? "TokerBank yeni hesap kaydınızı tamamlamak için tek kullanımlık doğrulama kodunuz (OTP) aşağıdadır:"
-                : "TokerBank hesabınıza giriş yapabilmek için tek kullanımlık doğrulama kodunuz (OTP) aşağıdadır:";
+            String bodyText;
+            if (isRegister) {
+                bodyText = "TokerBank yeni hesap kaydınızı tamamlamak için tek kullanımlık doğrulama kodunuz (OTP) aşağıdadır:";
+            } else if (isResetPassword) {
+                bodyText = "TokerBank hesabınızın parolasını sıfırlamak için tek kullanımlık doğrulama kodunuz (OTP) aşağıdadır:";
+            } else {
+                bodyText = "TokerBank hesabınıza giriş yapabilmek için tek kullanımlık doğrulama kodunuz (OTP) aşağıdadır:";
+            }
 
             String htmlContent = "<div style=\"font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 24px; border: 1px solid #e0e0e0; border-radius: 12px;\">"
                     + "<h2 style=\"color: #003399; margin-top: 0;\">" + actionTitle + "</h2>"

@@ -1,6 +1,7 @@
 com/banking/auth/controller/AuthController.class
 com/banking/auth/ml/FeatureEngineeringService.class
 com/banking/auth/model/Card.class
+com/banking/auth/dto/ForgotPasswordResetRequest.class
 com/banking/auth/repository/TransactionRepository.class
 com/banking/auth/model/Account.class
 com/banking/auth/model/FraudModel.class

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { checkEmail, login, verifyPassword, register, verifyOtp } from './api/authApi';
+import { checkEmail, login, verifyPassword, register, verifyOtp, forgotPasswordInit, forgotPasswordVerifyOtp, forgotPasswordReset } from './api/authApi';
 import MainDashboardView from './view/MainDashboardView';
 import tokerbankLogo from './assets/tokerbank-logo.png';
 import './App.css';
@@ -99,7 +99,7 @@ function App() {
 
   useEffect(() => {
     let timer;
-    if ((step === 'login-otp' || step === 'register-otp') && timeLeft > 0) {
+    if ((step === 'login-otp' || step === 'register-otp' || step === 'forgot-password-otp') && timeLeft > 0) {
       timer = setInterval(() => setTimeLeft((p) => p - 1), 1000);
     }
     return () => { if (timer) clearInterval(timer); };
@@ -198,6 +198,61 @@ function App() {
     }
   };
 
+  // Step 4a: Forgot Password Init (Email screen submit)
+  const handleForgotPasswordInitSubmit = (e) => {
+    e.preventDefault();
+    if (!email) { setError("Lütfen e-posta adresinizi giriniz."); return; }
+    
+    // Anında OTP ekranına atla (Timing attack'leri ve sonsuz beklemeyi önler)
+    setError(''); 
+    setMessage('Eğer hesap tanımlıysa e-postanıza şifre sıfırlama kodu gönderildi.'); 
+    setOtpMode('reset-password');
+    setStep('forgot-password-otp');
+    setTimeLeft(120);
+    setOtp('');
+    
+    // Arka planda API çağrısını asenkron yürüt
+    forgotPasswordInit(email).catch(err => {
+      console.warn("Şifre sıfırlama talebi arka planda başarısız oldu:", err);
+    });
+  };
+
+  // Step 4b: Forgot Password OTP Submit
+  const handleForgotPasswordOtpSubmit = async (e) => {
+    e.preventDefault();
+    if (!otp || otp.length < 6) { setError("Lütfen geçerli bir kod girin."); return; }
+    setError(''); setMessage(''); setLoading(true);
+    try {
+      await forgotPasswordVerifyOtp(email, otp);
+      setStep('forgot-password-new');
+      setPassword(''); setConfirmPassword('');
+    } catch (err) {
+      setError(err.response?.data?.error || err.message);
+    } finally { setLoading(false); }
+  };
+
+  // Step 4c: Forgot Password Reset Submit (Submit to backend)
+  const handleForgotPasswordResetSubmit = (e) => {
+    e.preventDefault();
+    if (password !== confirmPassword) { setError("Şifreler eşleşmiyor!"); return; }
+    if (!isPasswordValid) { setError("Lütfen tüm şifre kurallarına uyun."); return; }
+    
+    setError(''); 
+    setMessage('Şifre güncelleme talebiniz alındı. İşlem arka planda tamamlandığında yeni şifrenizle giriş yapabilirsiniz.');
+    
+    // Arka planda asenkron ateşle
+    forgotPasswordReset(email, otp, password).catch(err => {
+      console.warn("Şifre güncelleme arka planda başarısız:", err);
+    });
+
+    setTimeout(() => {
+      resetForm();
+      setEmail(email);
+      setStep('login');
+      setMessage('Şifre güncelleme talebiniz alındı. İşlem arka planda tamamlandığında yeni şifrenizle giriş yapabilirsiniz.');
+    }, 3000);
+  };
+
   // Resend OTP
   const handleResendOtp = async () => {
     setMessage(''); setError(''); setLoading(true);
@@ -281,6 +336,15 @@ function App() {
                   onClick={() => setShowPassword(!showPassword)}>
                   {showPassword ? '🙈' : '👁️'}
                 </button>
+              </div>
+              <div style={{ textAlign: 'center', marginTop: '12px' }}>
+                <a 
+                  href="#" 
+                  onClick={(e) => { e.preventDefault(); setError(''); setMessage(''); setStep('forgot-password-init'); }}
+                  style={{ color: '#db002b', fontSize: '13px', fontWeight: '500', textDecoration: 'none' }}
+                >
+                  Şifremi Unuttum
+                </a>
               </div>
             </div>
             
@@ -442,6 +506,117 @@ function App() {
               Kodu Tekrar Gönder
             </button>
             <button type="button" className="btn btn-secondary" onClick={resetForm}>← Geri Dön</button>
+          </form>
+        )}
+
+        {/* Step 4a: Forgot Password Init */}
+        {step === 'forgot-password-init' && (
+          <form className="login-form" onSubmit={handleForgotPasswordInitSubmit}>
+            <p className="step-info" style={{ marginBottom: '15px' }}>
+              Şifrenizi sıfırlamak için kayıtlı e-posta adresinizi girin.
+            </p>
+            <div className="form-group">
+              <label className="form-label" htmlFor="fp-email">E-POSTA ADRESİ</label>
+              <input id="fp-email" type="email" className="form-input"
+                placeholder="ornek@gmail.com" value={email}
+                onChange={(e) => setEmail(e.target.value)} required autoFocus />
+            </div>
+            <button type="submit" className="btn btn-primary" disabled={loading || !email}>
+              {loading ? 'Gönderiliyor...' : 'Doğrulama Kodu Gönder →'}
+            </button>
+            <button type="button" className="btn btn-secondary" onClick={resetForm}>← Geri Dön</button>
+          </form>
+        )}
+
+        {/* Step 4b: Forgot Password OTP */}
+        {step === 'forgot-password-otp' && (
+          <form className="login-form" onSubmit={handleForgotPasswordOtpSubmit}>
+            <p className="step-info">
+              <span className="email-display">{maskEmail(email)}</span> adresine gönderilen şifre sıfırlama kodunu girin.
+            </p>
+            <div className={`timer-badge ${timeLeft === 0 ? 'expired' : ''}`}>
+              {timeLeft > 0
+                ? <><span>⏱</span> Kalan Süre: <strong>{formatTime(timeLeft)}</strong></>
+                : <><span>⚠️</span> Kodun süresi doldu. Yeni kod isteyin.</>}
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="fp-otp">6 HANELİ DOĞRULAMA KODU</label>
+              <input id="fp-otp" type="text" className="form-input otp-input"
+                placeholder="••••••" value={otp}
+                onChange={(e) => setOtp(e.target.value)}
+                required maxLength="6" disabled={timeLeft === 0} autoFocus />
+            </div>
+            <button type="submit" className="btn btn-success" disabled={loading || timeLeft === 0 || !otp}>
+              Kodu Doğrula →
+            </button>
+            <button type="button" className="btn btn-outline" onClick={(e) => { e.preventDefault(); handleForgotPasswordInitSubmit(e); }} disabled={loading}>
+              Kodu Tekrar Gönder
+            </button>
+            <button type="button" className="btn btn-secondary" onClick={resetForm}>← İptal</button>
+          </form>
+        )}
+
+        {/* Step 4c: Forgot Password New */}
+        {step === 'forgot-password-new' && (
+          <form className="login-form" style={{ gap: '10px' }} onSubmit={handleForgotPasswordResetSubmit}>
+            <p className="step-info" style={{ marginBottom: '4px' }}>
+              Doğrulama başarılı. Lütfen yeni şifrenizi belirleyin.
+            </p>
+            
+            <div className="form-group">
+              <label className="form-label" htmlFor="fp-reset-pwd">YENİ ŞİFRE OLUŞTUR</label>
+              <div className="password-input-wrapper">
+                <input id="fp-reset-pwd"
+                  type={showPassword ? 'text' : 'password'}
+                  className="form-input" placeholder="En az 8 karakter"
+                  value={password} onChange={(e) => setPassword(e.target.value)} required autoFocus />
+                <button type="button" className="password-toggle"
+                  onClick={() => setShowPassword(!showPassword)}>
+                  {showPassword ? '🙈' : '👁️'}
+                </button>
+              </div>
+              {password.length > 0 && (
+                <div className="password-strength">
+                  <div className="strength-bar-track">
+                    <div className="strength-bar-fill"
+                      style={{ width: `${(pwdScore / 4) * 100}%`, background: pwdStrengthColor }} />
+                  </div>
+                  <span className="strength-label" style={{ color: pwdStrengthColor }}>
+                    {pwdStrengthLabel}
+                  </span>
+                  <ul className="password-rules">
+                    <li className={pwdRules.length ? 'rule-ok' : 'rule-fail'}>{pwdRules.length ? '✓' : '✗'} En az 8 karakter</li>
+                    <li className={pwdRules.uppercase ? 'rule-ok' : 'rule-fail'}>{pwdRules.uppercase ? '✓' : '✗'} En az 1 büyük harf</li>
+                    <li className={pwdRules.number ? 'rule-ok' : 'rule-fail'}>{pwdRules.number ? '✓' : '✗'} En az 1 rakam</li>
+                    <li className={pwdRules.special ? 'rule-ok' : 'rule-fail'}>{pwdRules.special ? '✓' : '✗'} En az 1 özel karakter</li>
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            <div className="form-group">
+              <label className="form-label" htmlFor="fp-reset-confirm-pwd">YENİ ŞİFRE TEKRAR</label>
+              <div className="password-input-wrapper">
+                <input id="fp-reset-confirm-pwd"
+                  type={showConfirm ? 'text' : 'password'}
+                  className={`form-input ${confirmPassword && password !== confirmPassword ? 'input-error' : ''}`}
+                  placeholder="Yeni şifrenizi tekrar girin"
+                  value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />
+                <button type="button" className="password-toggle"
+                  onClick={() => setShowConfirm(!showConfirm)}>
+                  {showConfirm ? '🙈' : '👁️'}
+                </button>
+              </div>
+              {confirmPassword && password !== confirmPassword && (
+                <span className="field-error">Şifreler eşleşmiyor</span>
+              )}
+            </div>
+
+            <button type="submit" className="btn btn-primary"
+              disabled={loading || !isPasswordValid || password !== confirmPassword}>
+              {loading ? 'Şifre Yenileniyor...' : 'Şifreyi Güncelle →'}
+            </button>
+            <button type="button" className="btn btn-secondary" onClick={resetForm}>← İptal</button>
           </form>
         )}
         </div>

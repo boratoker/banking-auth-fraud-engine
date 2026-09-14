@@ -6,6 +6,7 @@
 /Users/boratoker/workspace/banking-auth-fraud-engine/backend/auth-service/src/main/java/com/banking/auth/service/BankingService.java
 /Users/boratoker/workspace/banking-auth-fraud-engine/backend/auth-service/src/main/java/com/banking/auth/event/AuthEventProducer.java
 /Users/boratoker/workspace/banking-auth-fraud-engine/backend/auth-service/src/main/java/com/banking/auth/repository/TransactionRepository.java
+/Users/boratoker/workspace/banking-auth-fraud-engine/backend/auth-service/src/main/java/com/banking/auth/dto/ForgotPasswordResetRequest.java
 /Users/boratoker/workspace/banking-auth-fraud-engine/backend/auth-service/src/main/java/com/banking/auth/event/BankingEventProducer.java
 /Users/boratoker/workspace/banking-auth-fraud-engine/backend/auth-service/src/main/java/com/banking/auth/service/EmailService.java
 /Users/boratoker/workspace/banking-auth-fraud-engine/backend/auth-service/src/main/java/com/banking/auth/repository/SecuritySettingsRepository.java
