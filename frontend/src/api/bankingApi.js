@@ -14,12 +14,12 @@ export const getCardDetails = async () => {
   return await axios.get(`${API_BASE_URL}/cards`);
 };
 
-export const toggleCardFreeze = async (isFrozen) => {
-  return await axios.post(`${API_BASE_URL}/cards/toggle-freeze`, { isFrozen });
+export const toggleCardFreeze = async (cardId, isFrozen) => {
+  return await axios.post(`${API_BASE_URL}/cards/toggle-freeze`, { cardId, isFrozen });
 };
 
-export const toggleCardSetting = async (key, value) => {
-  return await axios.post(`${API_BASE_URL}/cards/toggle-setting`, { key, value });
+export const toggleCardSetting = async (cardId, key, value) => {
+  return await axios.post(`${API_BASE_URL}/cards/toggle-setting`, { cardId, key, value });
 };
 
 export const submitTransfer = async (transferData) => {

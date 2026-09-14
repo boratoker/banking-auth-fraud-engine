@@ -120,3 +120,103 @@ code {
   padding: 4px 8px;
   background: var(--code-bg);
 }
+
+/* --- SLIDESHOW CAROUSEL --- */
+.card-slideshow-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  width: 100%;
+}
+
+.slideshow-btn {
+  background: none;
+  border: none;
+  font-size: 2rem;
+  color: #fff;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.2s, transform 0.2s;
+  padding: 10px;
+}
+.slideshow-btn:hover {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+.slideshow-dots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 15px;
+}
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.2);
+  cursor: pointer;
+  transition: background-color 0.3s, transform 0.2s;
+}
+.dot.active {
+  background-color: var(--accent);
+  transform: scale(1.2);
+}
+
+/* --- CARD COLORS BY TYPE --- */
+.credit-card-visual {
+  transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.4s, background 0.4s;
+}
+
+.credit-card-visual.card-virtual_platinum {
+  background: linear-gradient(135deg, #1f212c, #0a0b10);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.credit-card-visual.card-credit {
+  background: linear-gradient(135deg, #b0891d, #6e5203);
+  border: 1px solid rgba(255, 215, 0, 0.3);
+  box-shadow: 0 10px 30px rgba(176, 137, 29, 0.2);
+}
+
+.credit-card-visual.card-debit {
+  background: linear-gradient(135deg, #2a5a8a, #0d2642);
+  border: 1px solid rgba(132, 191, 255, 0.2);
+}
+
+/* --- CARD LIMITS PANEL --- */
+.card-limits-panel {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-top: 25px;
+  border: 1px solid var(--border);
+}
+
+.limit-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  font-size: 0.95rem;
+}
+.limit-row strong {
+  color: var(--text);
+  font-weight: 600;
+  margin-left: 5px;
+}
+
+.limit-bar {
+  width: 100%;
+  height: 8px;
+  background-color: var(--bg);
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.3);
+}
+
+.limit-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #e74c3c, #f1c40f);
+  transition: width 0.5s ease-out;
+}

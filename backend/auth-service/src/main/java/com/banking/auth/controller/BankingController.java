@@ -152,50 +152,66 @@ public class BankingController {
 
     // --- GET /api/v1/banking/cards ---
     @GetMapping("/cards")
-    public ResponseEntity<Map<String, Object>> getCardDetails() {
+    public ResponseEntity<List<Map<String, Object>>> getCardDetails() {
         List<Card> cards = cardRepository.findByUserId(getDemoUserId());
-        if (cards.isEmpty()) return ResponseEntity.notFound().build();
+        if (cards.isEmpty()) return ResponseEntity.ok(Collections.emptyList());
         
-        Card card = cards.get(0);
-        Map<String, Object> map = new HashMap<>();
-        map.put("id", card.getId());
-        map.put("isFrozen", card.isFrozen());
-        map.put("internetAllowed", card.isInternetAllowed());
-        map.put("overseasAllowed", card.isOverseasAllowed());
-        map.put("cardNumber", card.getCardNumberMasked());
-        map.put("expiry", card.getExpiryDate());
-        map.put("cvv", "***"); // masked
-        map.put("holder", card.getCardHolder());
+        List<Map<String, Object>> responseList = new ArrayList<>();
+        for (Card card : cards) {
+            Map<String, Object> map = new HashMap<>();
+            map.put("id", card.getId());
+            map.put("type", card.getCardType());
+            map.put("isFrozen", card.isFrozen());
+            map.put("internetAllowed", card.isInternetAllowed());
+            map.put("overseasAllowed", card.isOverseasAllowed());
+            map.put("cardNumber", card.getCardNumberMasked());
+            map.put("expiry", card.getExpiryDate());
+            map.put("cvv", "***"); // masked
+            map.put("holder", card.getCardHolder());
+            map.put("totalLimit", card.getTotalLimit());
+            map.put("currentSpent", card.getCurrentSpent());
+            responseList.add(map);
+        }
         
-        return ResponseEntity.ok(map);
+        return ResponseEntity.ok(responseList);
     }
 
     // --- POST /api/v1/banking/cards/toggle-freeze ---
     @PostMapping("/cards/toggle-freeze")
-    public ResponseEntity<Map<String, Object>> toggleCardFreeze(@RequestBody Map<String, Boolean> body) {
-        Boolean frozen = body.getOrDefault("isFrozen", false);
-        List<Card> cards = cardRepository.findByUserId(getDemoUserId());
-        if (!cards.isEmpty()) {
-            Card card = cards.get(0);
-            card.setFrozen(frozen);
-            cardRepository.save(card);
+    public ResponseEntity<Map<String, Object>> toggleCardFreeze(@RequestBody Map<String, Object> body) {
+        Boolean frozen = (Boolean) body.getOrDefault("isFrozen", false);
+        String cardIdStr = (String) body.get("cardId");
+        
+        if (cardIdStr != null) {
+            UUID cardId = UUID.fromString(cardIdStr);
+            cardRepository.findById(cardId).ifPresent(card -> {
+                if (card.getUser().getId().equals(getDemoUserId())) {
+                    card.setFrozen(frozen);
+                    cardRepository.save(card);
+                }
+            });
         }
         return ResponseEntity.ok(Map.of("success", true, "isFrozen", frozen));
     }
 
     // --- POST /api/v1/banking/cards/toggle-setting ---
     @PostMapping("/cards/toggle-setting")
-    public ResponseEntity<Map<String, Object>> toggleCardSetting(@RequestBody Map<String, Object> body) {
+    public ResponseEntity<List<Map<String, Object>>> toggleCardSetting(@RequestBody Map<String, Object> body) {
         String key = (String) body.get("key");
         Boolean value = (Boolean) body.get("value");
-        List<Card> cards = cardRepository.findByUserId(getDemoUserId());
-        if (!cards.isEmpty() && key != null && value != null) {
-            Card card = cards.get(0);
-            if ("internetAllowed".equals(key)) card.setInternetAllowed(value);
-            if ("overseasAllowed".equals(key)) card.setOverseasAllowed(value);
-            cardRepository.save(card);
+        String cardIdStr = (String) body.get("cardId");
+        
+        if (cardIdStr != null && key != null && value != null) {
+            UUID cardId = UUID.fromString(cardIdStr);
+            cardRepository.findById(cardId).ifPresent(card -> {
+                if (card.getUser().getId().equals(getDemoUserId())) {
+                    if ("internetAllowed".equals(key)) card.setInternetAllowed(value);
+                    if ("overseasAllowed".equals(key)) card.setOverseasAllowed(value);
+                    cardRepository.save(card);
+                }
+            });
         }
-        return getCardDetails(); // return updated state
+        return getCardDetails(); // return updated state of all cards
     }
 
     // --- POST /api/v1/banking/transfers (ML Fraud Engine Risk Evaluation) ---
