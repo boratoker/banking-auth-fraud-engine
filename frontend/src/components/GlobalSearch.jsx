@@ -1,56 +1,58 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { getAccounts, getTransactions, getContacts, getCardDetails } from '../api/bankingApi';
+import { normalizeTurkish } from '../utils/textUtils';
 
-const STATIC_ACTIONS = [
+// Sidebar Menu items for direct navigation
+const SIDEBAR_MENUS = [
   {
-    id: 'action-transfer',
-    type: 'action',
-    title: 'Yeni FAST Para Transferi',
-    subtitle: '7/24 anında IBAN veya kayıtlı alıcıya para gönder',
+    id: 'menu-overview',
+    type: 'menu',
+    title: 'Genel Özet',
+    subtitle: 'Ana sayfa, toplam varlıklar ve finansal durum paneli',
+    icon: '📊',
+    badge: 'Menü',
+    tab: 'overview',
+    keywords: ['ozet', 'genel', 'dashboard', 'ana sayfa', 'bakiye', 'varlik', 'durum', 'finans', 'menu']
+  },
+  {
+    id: 'menu-accounts',
+    type: 'menu',
+    title: 'Hesaplarım & Kartlar',
+    subtitle: 'Vadesiz/vadeli hesaplar, IBAN listesi ve sanal kart yönetimi',
+    icon: '💳',
+    badge: 'Menü',
+    tab: 'accounts',
+    keywords: ['hesap', 'kart', 'hesaplarim', 'kartlar', 'sanal', 'iban', 'bakiye', 'limit', 'vadeli', 'vadesiz', 'dondur', 'menu']
+  },
+  {
+    id: 'menu-transfer',
+    type: 'menu',
+    title: 'Para Transferi (FAST)',
+    subtitle: '7/24 anında FAST/EFT transferi, IBAN ve rehbere para gönderme',
     icon: '💸',
     badge: 'FAST 7/24',
-    keywords: ['transfer', 'para', 'gönder', 'fast', 'havale', 'eft', 'iban', 'yolla', 'ödeme'],
-    tab: 'transfer'
+    tab: 'transfer',
+    keywords: ['transfer', 'para', 'fast', 'havale', 'eft', 'gonder', 'yolla', 'iban', 'alici', 'rehber', 'odeme', 'menu']
   },
   {
-    id: 'action-card',
-    type: 'action',
-    title: 'Sanal Kart & Güvenlik Ayarları',
-    subtitle: 'Kartı anında dondur, e-ticaret ve yurt dışı izinlerini yönet',
-    icon: '💳',
-    badge: 'Güvenlik',
-    keywords: ['kart', 'sanal', 'dondur', 'limit', 'cvv', 'kredi', 'güvenlik', 'harcama'],
-    tab: 'accounts'
-  },
-  {
-    id: 'action-transactions',
-    type: 'action',
-    title: 'Hesap Hareketleri & Raporlar',
-    subtitle: 'Tüm harcama, gelir ve AI Fraud Shield doğrulama kayıtları',
-    icon: '🧾',
-    badge: 'Ekstre',
-    keywords: ['işlem', 'hareket', 'geçmiş', 'ekstre', 'rapor', 'dekont', 'harcama', 'gelir', 'gider'],
-    tab: 'transactions'
-  },
-  {
-    id: 'action-security',
-    type: 'action',
-    title: 'Güvenlik & Risk Yönetim Merkezi',
-    subtitle: 'Aktif bağlı cihaz oturumları, IP analizi ve AI risk skoru',
+    id: 'menu-security',
+    type: 'menu',
+    title: 'Güvenlik & Risk Merkezi',
+    subtitle: 'Aktif bağlı cihaz oturumları, IP analizi ve AI Fraud Shield koruması',
     icon: '🔒',
-    badge: 'AI Shield',
-    keywords: ['güvenlik', 'cihaz', 'oturum', 'ip', 'risk', 'skor', 'ai', 'şifre', 'bloke', 'challenge'],
-    tab: 'security'
+    badge: 'AI Active',
+    tab: 'security',
+    keywords: ['guvenlik', 'risk', 'merkez', 'cihaz', 'oturum', 'ip', 'ai', 'fraud', 'shield', 'koruma', 'bloke', 'sifre', 'menu']
   },
   {
-    id: 'action-overview',
-    type: 'action',
-    title: 'Genel Varlık & Finansal Özet',
-    subtitle: 'Tüm banka varlıkları, birikim faiz oranları ve bakiye durumu',
-    icon: '📊',
-    badge: 'Özet',
-    keywords: ['özet', 'dashboard', 'genel', 'bakiye', 'varlık', 'toplam', 'ana sayfa'],
-    tab: 'overview'
+    id: 'menu-transactions',
+    type: 'menu',
+    title: 'İşlem Geçmişi',
+    subtitle: 'Tüm gelen/giden transferler, ekstre dökümü ve harcama filtreleme',
+    icon: '🧾',
+    badge: 'Menü',
+    tab: 'transactions',
+    keywords: ['islem', 'gecmisi', 'gecmis', 'hareket', 'ekstre', 'rapor', 'harcama', 'gelir', 'gider', 'fatura', 'dekont', 'menu']
   }
 ];
 
@@ -58,7 +60,7 @@ const POPULAR_SEARCH_CHIPS = [
   'Maaş',
   'Netflix',
   'FAST Transfer',
-  'Ahmet Yılmaz',
+  'Ayşe',
   'Trendyol',
   'Sanal Kart'
 ];
@@ -140,53 +142,46 @@ const GlobalSearch = ({ onNavigate }) => {
     return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(val || 0);
   };
 
-  const normalizeStr = (str) => {
-    if (!str) return '';
-    return str
-      .toString()
-      .trim()
-      .toLocaleLowerCase('tr-TR');
-  };
-
-  // Filtered Results
+  // Filtered Results with Turkish character-insensitive matching
   const results = useMemo(() => {
-    const q = normalizeStr(query);
+    const q = normalizeTurkish(query);
 
     if (!q) {
-      // Empty query: Show quick actions & suggestions
+      // Empty query: Show sidebar menus & popular chips
       return {
-        actions: STATIC_ACTIONS,
+        menus: SIDEBAR_MENUS,
         accounts: [],
         contacts: [],
         transactions: [],
-        totalCount: STATIC_ACTIONS.length
+        totalCount: SIDEBAR_MENUS.length
       };
     }
 
-    // 1. Actions Filter
-    const matchedActions = STATIC_ACTIONS.filter(act => {
-      const matchTitle = normalizeStr(act.title).includes(q);
-      const matchSub = normalizeStr(act.subtitle).includes(q);
-      const matchKey = act.keywords.some(k => normalizeStr(k).includes(q) || q.includes(normalizeStr(k)));
+    // 1. Sidebar Menus Filter
+    const matchedMenus = SIDEBAR_MENUS.filter(menu => {
+      const matchTitle = normalizeTurkish(menu.title).includes(q);
+      const matchSub = normalizeTurkish(menu.subtitle).includes(q);
+      const matchKey = menu.keywords.some(k => normalizeTurkish(k).includes(q) || q.includes(normalizeTurkish(k)));
       return matchTitle || matchSub || matchKey;
     });
 
     // 2. Accounts & Card Filter
     const matchedAccounts = accounts.filter(acc => {
-      const matchName = normalizeStr(acc.name).includes(q);
-      const matchIban = normalizeStr(acc.iban).replace(/\s+/g, '').includes(q.replace(/\s+/g, ''));
-      const matchType = normalizeStr(acc.type).includes(q);
-      const matchCurrency = normalizeStr(acc.currency).includes(q);
+      const matchName = normalizeTurkish(acc.name).includes(q);
+      const matchIban = normalizeTurkish(acc.iban).replace(/\s+/g, '').includes(q.replace(/\s+/g, ''));
+      const matchType = normalizeTurkish(acc.type).includes(q);
+      const matchCurrency = normalizeTurkish(acc.currency).includes(q);
       return matchName || matchIban || matchType || matchCurrency;
     });
 
-    // If query matches card terms, include the virtual card
+    // If query matches card terms (e.g. limit, kart, sanal, etc.)
     const cardMatches = card && (
       q.includes('kart') ||
       q.includes('sanal') ||
       q.includes('platinum') ||
       q.includes('8819') ||
-      q.includes('limit')
+      q.includes('limit') ||
+      q.includes('harcama')
     );
 
     const accountItems = [
@@ -212,11 +207,11 @@ const GlobalSearch = ({ onNavigate }) => {
       }] : [])
     ];
 
-    // 3. Contacts Filter
+    // 3. Contacts Filter (e.g. Ayse matches Ayşe, Celik matches Çelik)
     const matchedContacts = contacts.filter(con => {
-      const matchName = normalizeStr(con.name).includes(q);
-      const matchAlias = normalizeStr(con.alias).includes(q);
-      const matchIban = normalizeStr(con.iban).replace(/\s+/g, '').includes(q.replace(/\s+/g, ''));
+      const matchName = normalizeTurkish(con.name).includes(q);
+      const matchAlias = normalizeTurkish(con.alias).includes(q);
+      const matchIban = normalizeTurkish(con.iban).replace(/\s+/g, '').includes(q.replace(/\s+/g, ''));
       return matchName || matchAlias || matchIban;
     }).map(con => ({
       id: `con-${con.id}`,
@@ -231,9 +226,9 @@ const GlobalSearch = ({ onNavigate }) => {
 
     // 4. Transactions Filter
     const matchedTransactions = transactions.filter(tx => {
-      const matchTitle = normalizeStr(tx.title).includes(q);
-      const matchCategory = normalizeStr(tx.category).includes(q);
-      const matchStatus = normalizeStr(tx.status).includes(q);
+      const matchTitle = normalizeTurkish(tx.title).includes(q);
+      const matchCategory = normalizeTurkish(tx.category).includes(q);
+      const matchStatus = normalizeTurkish(tx.status).includes(q);
       const matchAmount = (tx.amount?.toString() || '').includes(q);
       return matchTitle || matchCategory || matchStatus || matchAmount;
     }).map(tx => ({
@@ -250,13 +245,13 @@ const GlobalSearch = ({ onNavigate }) => {
     }));
 
     const totalCount =
-      matchedActions.length +
+      matchedMenus.length +
       accountItems.length +
       matchedContacts.length +
       matchedTransactions.length;
 
     return {
-      actions: matchedActions,
+      menus: matchedMenus,
       accounts: accountItems,
       contacts: matchedContacts,
       transactions: matchedTransactions,
@@ -267,7 +262,7 @@ const GlobalSearch = ({ onNavigate }) => {
   // Flattened items for arrow navigation
   const flatItems = useMemo(() => {
     const items = [];
-    results.actions.forEach(a => items.push({ ...a, section: 'actions' }));
+    results.menus.forEach(m => items.push({ ...m, section: 'menus' }));
     results.accounts.forEach(a => items.push({ ...a, section: 'accounts' }));
     results.contacts.forEach(c => items.push({ ...c, section: 'contacts' }));
     results.transactions.slice(0, 5).forEach(t => items.push({ ...t, section: 'transactions' }));
@@ -288,7 +283,7 @@ const GlobalSearch = ({ onNavigate }) => {
   const handleSelect = (item) => {
     if (!item) return;
 
-    if (item.type === 'action') {
+    if (item.type === 'menu') {
       if (onNavigate) onNavigate(item.tab);
     } else if (item.type === 'account' || item.type === 'card') {
       if (onNavigate) onNavigate('accounts');
@@ -383,7 +378,7 @@ const GlobalSearch = ({ onNavigate }) => {
           }}
           onFocus={() => setIsOpen(true)}
           onKeyDown={handleKeyDown}
-          placeholder="Hesap, transfer, kişi veya işlem ara..."
+          placeholder="Menü, hesap, transfer, kişi veya işlem ara..."
           className="search-input"
           autoComplete="off"
           spellCheck="false"
@@ -407,30 +402,30 @@ const GlobalSearch = ({ onNavigate }) => {
 
       {isOpen && (
         <div className="search-dropdown-menu" ref={dropdownRef}>
-          {/* If query is empty: Show Quick Actions & Popular Search Chips */}
+          {/* If query is empty: Show Sidebar Menus & Popular Search Chips */}
           {!query.trim() && (
             <div className="search-empty-state-content">
               <div className="search-category-header">
-                <span>⚡ HIZLI İŞLEMLER & KISAYOLLAR</span>
+                <span>🧭 SİDEBAR MENÜLERİ & SAYFALAR</span>
               </div>
               <div className="search-results-group">
-                {STATIC_ACTIONS.map((action) => {
-                  const idx = getItemIndex(action.id);
+                {SIDEBAR_MENUS.map((menu) => {
+                  const idx = getItemIndex(menu.id);
                   const isHighlighted = selectedIndex === idx;
                   return (
                     <div
-                      key={action.id}
+                      key={menu.id}
                       data-index={idx}
                       className={`search-result-item ${isHighlighted ? 'highlighted' : ''}`}
-                      onClick={() => handleSelect(action)}
+                      onClick={() => handleSelect(menu)}
                       onMouseEnter={() => setSelectedIndex(idx)}
                     >
-                      <div className="item-icon-box action-icon">{action.icon}</div>
+                      <div className="item-icon-box menu-icon">{menu.icon}</div>
                       <div className="item-info">
-                        <div className="item-title">{action.title}</div>
-                        <div className="item-sub">{action.subtitle}</div>
+                        <div className="item-title">{menu.title}</div>
+                        <div className="item-sub">{menu.subtitle}</div>
                       </div>
-                      <span className="item-badge">{action.badge}</span>
+                      <span className="item-badge">{menu.badge}</span>
                     </div>
                   );
                 })}
@@ -457,29 +452,29 @@ const GlobalSearch = ({ onNavigate }) => {
           {/* If query has text and matches exist */}
           {query.trim() && results.totalCount > 0 && (
             <div className="search-results-scrollable">
-              {/* Quick Actions */}
-              {results.actions.length > 0 && (
+              {/* Sidebar Menus */}
+              {results.menus.length > 0 && (
                 <div className="search-section">
                   <div className="search-category-header">
-                    <span>⚡ HIZLI İŞLEMLER ({results.actions.length})</span>
+                    <span>🧭 SİDEBAR MENÜLERİ ({results.menus.length})</span>
                   </div>
-                  {results.actions.map((act) => {
-                    const idx = getItemIndex(act.id);
+                  {results.menus.map((menu) => {
+                    const idx = getItemIndex(menu.id);
                     const isHighlighted = selectedIndex === idx;
                     return (
                       <div
-                        key={act.id}
+                        key={menu.id}
                         data-index={idx}
                         className={`search-result-item ${isHighlighted ? 'highlighted' : ''}`}
-                        onClick={() => handleSelect(act)}
+                        onClick={() => handleSelect(menu)}
                         onMouseEnter={() => setSelectedIndex(idx)}
                       >
-                        <div className="item-icon-box action-icon">{act.icon}</div>
+                        <div className="item-icon-box menu-icon">{menu.icon}</div>
                         <div className="item-info">
-                          <div className="item-title">{act.title}</div>
-                          <div className="item-sub">{act.subtitle}</div>
+                          <div className="item-title">{menu.title}</div>
+                          <div className="item-sub">{menu.subtitle}</div>
                         </div>
-                        <span className="item-badge">{act.badge}</span>
+                        <span className="item-badge">{menu.badge}</span>
                       </div>
                     );
                   })}
@@ -597,14 +592,14 @@ const GlobalSearch = ({ onNavigate }) => {
               <div className="no-results-icon">🔍</div>
               <div className="no-results-title">"{query}" ile eşleşen sonuç bulunamadı</div>
               <p className="no-results-desc">
-                Hesap adı, alıcı ismi, IBAN, harcama kategorisi veya anahtar kelimelerle arama yapabilirsiniz.
+                Menü adı (Özet, Hesap, Transfer, Güvenlik), alıcı ismi, IBAN veya harcama arayabilirsiniz.
               </p>
               <div className="no-results-chips">
                 <span>Örnekler:</span>
+                <button type="button" onClick={() => handleChipClick('Transfer')}>Transfer</button>
+                <button type="button" onClick={() => handleChipClick('Limit')}>Limit</button>
+                <button type="button" onClick={() => handleChipClick('Ayşe')}>Ayşe</button>
                 <button type="button" onClick={() => handleChipClick('Netflix')}>Netflix</button>
-                <button type="button" onClick={() => handleChipClick('Maaş')}>Maaş</button>
-                <button type="button" onClick={() => handleChipClick('Ahmet')}>Ahmet</button>
-                <button type="button" onClick={() => handleChipClick('Vadesiz')}>Vadesiz</button>
               </div>
             </div>
           )}
@@ -627,7 +622,7 @@ const GlobalSearch = ({ onNavigate }) => {
             ) : (
               <div className="footer-keys-hint">
                 <span><strong>↑↓</strong> Gezin</span>
-                <span><strong>↵</strong> Seç</span>
+                <span><strong>↵</strong> Menüye Git</span>
                 <span><strong>ESC</strong> Kapat</span>
               </div>
             )}

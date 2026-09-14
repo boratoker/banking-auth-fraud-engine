@@ -33,17 +33,20 @@ public class BankingService {
     private final UserRepository userRepository;
     private final BankingEventProducer eventProducer;
     private final MlFraudInferenceEngine fraudEngine;
+    private final EmailService emailService;
 
     public BankingService(AccountRepository accountRepository,
                           TransactionRepository transactionRepository,
                           UserRepository userRepository,
                           BankingEventProducer eventProducer,
-                          MlFraudInferenceEngine fraudEngine) {
+                          MlFraudInferenceEngine fraudEngine,
+                          EmailService emailService) {
         this.accountRepository = accountRepository;
         this.transactionRepository = transactionRepository;
         this.userRepository = userRepository;
         this.eventProducer = eventProducer;
         this.fraudEngine = fraudEngine;
+        this.emailService = emailService;
     }
 
     /**
@@ -132,7 +135,11 @@ public class BankingService {
         if ("CHALLENGE_OTP".equals(decision)) {
             txn.setStatus("OTP_CHALLENGED");
             transactionRepository.save(txn);
-            // OTP süreci başlatılmalı. Şimdilik işlem sonucunu dönüyoruz, Controller tarafı 2FA modalını tetikleyecek.
+            
+            // 2FA OTP Üret ve Gönder (Architecture diagram flow)
+            String otpCode = "123456"; // Demo environment test code
+            emailService.sendOtpEmail(user.getEmail(), otpCode, "transfer");
+            
             return txn; 
         }
 

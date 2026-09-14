@@ -117,18 +117,30 @@ public class MlFraudInferenceEngine {
                 try (OrtSession.Result result = session.run(inputs)) {
                     Object val = result.get(1).getValue();
                     float fraudProb = 0.0f;
-                    if (val instanceof List) {
+                    
+                    if (val instanceof float[][]) {
+                        float[][] probs = (float[][]) val;
+                        if (probs.length > 0 && probs[0].length > 1) {
+                            fraudProb = probs[0][1];
+                        }
+                    } else if (val instanceof List) {
                         List<?> list = (List<?>) val;
                         if (!list.isEmpty() && list.get(0) instanceof Map) {
                             Map<?, ?> map = (Map<?, ?>) list.get(0);
                             Object p1 = map.get(1L);
                             if (p1 == null) p1 = map.get(1); // Integer key fallback
+                            if (p1 == null) p1 = map.get(1.0f); // Float key fallback
                             if (p1 instanceof Float) {
                                 fraudProb = (Float) p1;
+                            } else if (p1 instanceof Number) {
+                                fraudProb = ((Number) p1).floatValue();
                             }
                         }
                     }
-                    riskScore = fraudProb * 100.0;
+                    
+                    double mlScore = fraudProb * 100.0;
+                    double ruleScore = computeRuleBasedScore(features);
+                    riskScore = (mlScore * 0.7) + (ruleScore * 0.3);
                 }
                 tensor.close();
                 
@@ -152,8 +164,8 @@ public class MlFraudInferenceEngine {
         double latencyMs = (System.nanoTime() - startTime) / 1_000_000.0;
 
         // 5. Risk Seviyesi ve Karar
-        String riskLevel = determineRiskLevel(riskScore);
-        String decision = determineDecision(riskScore);
+        String riskLevel = determineRiskLevel(riskScore, amount);
+        String decision = determineDecision(riskScore, amount);
         List<String> triggeredRules = detectTriggeredRules(features, riskScore);
         String reason = buildReason(triggeredRules, riskScore);
 
@@ -203,12 +215,12 @@ public class MlFraudInferenceEngine {
     private double computeRuleBasedScore(Map<String, Object> features) {
         double score = 0;
 
-        // Yüksek tutar kuralı (₺10.000+)
+        // Yüksek tutar kuralı (₺50.000+)
         double amount = getDouble(features, "amount");
-        if (amount >= 50000) score += 30;
-        else if (amount >= 25000) score += 20;
-        else if (amount >= 10000) score += 12;
-        else if (amount >= 5000) score += 5;
+        if (amount >= 250000) score += 30;
+        else if (amount >= 100000) score += 20;
+        else if (amount >= 50000) score += 12;
+        else if (amount >= 25000) score += 5;
 
         // Ortalama üstü tutar oranı
         double ratio = getDouble(features, "amount_to_user_avg_ratio");
@@ -247,7 +259,7 @@ public class MlFraudInferenceEngine {
         else if (timeSince < 60) score += 5;
 
         // Yuvarlak tutar (fraud kalıplarında yaygın)
-        if (getInt(features, "amount_is_round") == 1 && amount >= 10000) score += 3;
+        if (getInt(features, "amount_is_round") == 1 && amount >= 50000) score += 3;
 
         return Math.min(100, Math.max(0, score));
     }
@@ -305,7 +317,7 @@ public class MlFraudInferenceEngine {
         double amount = getDouble(features, "amount");
         double ratio = getDouble(features, "amount_to_user_avg_ratio");
 
-        if (amount >= 10000) {
+        if (amount >= 50000) {
             contributions.put("Yüksek Tutar (₺" + String.format("%.0f", amount) + ")",
                 Math.min(0.42, amount / 100000.0));
         }
@@ -332,22 +344,22 @@ public class MlFraudInferenceEngine {
         return contributions;
     }
 
-    private String determineRiskLevel(double riskScore) {
-        if (riskScore <= 25) return "SAFE";
-        if (riskScore <= 55) return "MEDIUM";
-        if (riskScore <= 80) return "HIGH";
-        return "CRITICAL";
+    private String determineRiskLevel(double riskScore, BigDecimal amount) {
+        if (riskScore > 80) return "CRITICAL";
+        if (riskScore > 55 || amount.compareTo(BigDecimal.valueOf(50000)) >= 0) return "HIGH";
+        if (riskScore > 25) return "MEDIUM";
+        return "SAFE";
     }
 
-    private String determineDecision(double riskScore) {
-        if (riskScore <= 25) return "APPROVE";
-        if (riskScore <= 80) return "CHALLENGE_OTP";
-        return "BLOCK";
+    private String determineDecision(double riskScore, BigDecimal amount) {
+        if (riskScore > 80) return "REJECTED";
+        if (riskScore > 55 || amount.compareTo(BigDecimal.valueOf(50000)) >= 0) return "OTP_CHALLENGED";
+        return "COMPLETED";
     }
 
     private List<String> detectTriggeredRules(Map<String, Object> features, double riskScore) {
         List<String> rules = new ArrayList<>();
-        if (getDouble(features, "amount") >= 10000) rules.add("HIGH_AMOUNT");
+        if (getDouble(features, "amount") >= 50000) rules.add("HIGH_AMOUNT");
         if (getInt(features, "is_new_recipient_iban") == 1) rules.add("NEW_IBAN");
         if (getInt(features, "is_night_time") == 1) rules.add("NIGHT_TIME");
         if (getDouble(features, "tx_count_last_1h") >= 3) rules.add("VELOCITY_SPIKE");

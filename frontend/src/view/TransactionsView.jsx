@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { getTransactions } from '../api/bankingApi';
 import tokerbankLogo from '../assets/tokerbank-logo.png';
+import { normalizeTurkish } from '../utils/textUtils';
+import { RiskBadge, getRiskBadgeInfo, parseRiskScore } from '../utils/riskUtils';
 
 const TransactionsView = ({ initialSearchTerm = '' }) => {
   const [searchTerm, setSearchTerm] = useState(initialSearchTerm || '');
@@ -28,14 +30,15 @@ const TransactionsView = ({ initialSearchTerm = '' }) => {
   }, []);
 
   const filteredTransactions = allTransactions.filter((tx) => {
-    const matchesSearch = tx.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          tx.category.toLowerCase().includes(searchTerm.toLowerCase());
+    const q = normalizeTurkish(searchTerm);
+    const matchesSearch = !q || 
+                          normalizeTurkish(tx.title).includes(q) || 
+                          normalizeTurkish(tx.category).includes(q);
     
     const matchesCategory = selectedCategory === 'ALL' || tx.category === selectedCategory;
     
-    const matchesRisk = selectedRisk === 'ALL' || 
-                        (selectedRisk === 'SAFE' && tx.risk === 'Safe') ||
-                        (selectedRisk === 'FLAGGED' && tx.risk === 'Flagged');
+    const riskInfo = getRiskBadgeInfo(tx.risk, tx.riskScore);
+    const matchesRisk = selectedRisk === 'ALL' || riskInfo.level === selectedRisk;
 
     return matchesSearch && matchesCategory && matchesRisk;
   });
@@ -64,9 +67,13 @@ const TransactionsView = ({ initialSearchTerm = '' }) => {
           <span className="card-sub">{allTransactions.filter(t => t.amount < 0).length} İşlem</span>
         </div>
         <div className="metric-card">
-          <span className="card-title">AI Fraud Shield Doğrulaması</span>
-          <div className="card-value">%100 Güvenli</div>
-          <span className="card-sub">1 İşlem Risk İncelemesinde</span>
+          <span className="card-title">Genel Güvenlik Skoru</span>
+          <div className="card-value">
+            %{allTransactions.length > 0 
+                ? 100 - Math.round(allTransactions.reduce((acc, t) => acc + parseRiskScore(t.riskScore), 0) / allTransactions.length) 
+                : 100} Güvenli
+          </div>
+          <span className="card-sub">{allTransactions.length} İşlem AI Tarafından Tarandı</span>
         </div>
       </div>
 
@@ -107,8 +114,10 @@ const TransactionsView = ({ initialSearchTerm = '' }) => {
               onChange={(e) => setSelectedRisk(e.target.value)}
             >
               <option value="ALL">Tüm Risk Seviyeleri</option>
-              <option value="SAFE">Güvenli (%0-5 Risk)</option>
-              <option value="FLAGGED">Fraud İncelemesinde</option>
+              <option value="SAFE">Güvenli (%0-25)</option>
+              <option value="MEDIUM">Orta Risk (%26-55)</option>
+              <option value="HIGH">Yüksek Risk (%56-80)</option>
+              <option value="CRITICAL">Kritik Risk (%81-100)</option>
             </select>
           </div>
         </div>
@@ -141,19 +150,15 @@ const TransactionsView = ({ initialSearchTerm = '' }) => {
                     <td><span className="tx-category">{tx.category}</span></td>
                     <td><span className="tx-date">{tx.date}</span></td>
                     <td>
-                      <span className={`risk-tag ${tx.risk === 'Safe' ? 'safe' : 'flagged'}`}>
-                        {tx.risk === 'Safe' ? (
-                          <>
-                            <img src={tokerbankLogo} alt="Logo" style={{ width: 14, height: 14, objectFit: 'contain', verticalAlign: 'middle', marginRight: 4 }} />
-                            %{tx.riskScore} Risk
-                          </>
-                        ) : `⚠️ %${tx.riskScore} Yüksek Risk`}
-                      </span>
+                      <RiskBadge riskLevel={tx.risk} riskScore={tx.riskScore} />
                     </td>
                     <td>
-                      <span className={`status-pill ${tx.status === 'Başarılı' ? 'success' : 'warning'}`}>
-                        {tx.status}
-                      </span>
+                      {tx.status === 'COMPLETED' && <span className="status-pill success">Approved</span>}
+                      {tx.status === 'OTP_CHALLENGED' && <span className="status-pill warning">OTP Challenged</span>}
+                      {tx.status === 'REJECTED' && <span className="status-pill danger">Rejected</span>}
+                      {!['COMPLETED', 'OTP_CHALLENGED', 'REJECTED'].includes(tx.status) && (
+                        <span className="status-pill">{tx.status}</span>
+                      )}
                     </td>
                     <td className={`text-right tx-amount ${tx.amount > 0 ? 'income' : 'expense'}`}>
                       {tx.amount > 0 ? `+${tx.amount.toFixed(2)} ₺` : `${tx.amount.toFixed(2)} ₺`}

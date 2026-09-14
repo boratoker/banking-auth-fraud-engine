@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { submitTransfer, verifyTransferOtp, getContacts } from '../api/bankingApi';
 import tokerbankLogo from '../assets/tokerbank-logo.png';
+import { RiskBadge } from '../utils/riskUtils';
 
 const TransferView = ({ initialRecipient = '', initialIban = '' }) => {
   const [recipientIban, setRecipientIban] = useState(initialIban || '');
@@ -49,7 +50,7 @@ const TransferView = ({ initialRecipient = '', initialIban = '' }) => {
         setFraudModalData({
           riskLevel: data.riskLevel,
           riskScore: data.riskScore || 68,
-          reason: data.reason || 'Yüksek tutarlı transfer (₺10,000+) ve ek güvenlik kuralı.',
+          reason: data.reason || 'Yüksek tutarlı transfer (₺50,000+) ve ek güvenlik kuralı.',
           amount: numericAmount,
           recipient: recipientName || 'Alıcı',
           iban: recipientIban,
@@ -65,13 +66,26 @@ const TransferView = ({ initialRecipient = '', initialIban = '' }) => {
         setDescription('');
       }
     } catch (err) {
-      // Graceful fallback if backend API is not responding
       setLoading(false);
-      if (numericAmount >= 10000) {
+      
+      // Handle blocked transactions (CRITICAL risk)
+      if (err.response && err.response.status === 403) {
+        setErrorMsg(err.response.data.error || 'İşleminiz güvenlik nedeniyle bloke edildi.');
+        return;
+      }
+      
+      // Handle business errors (e.g., insufficient balance)
+      if (err.response && err.response.status === 400) {
+        setErrorMsg(err.response.data.error || 'İşlem gerçekleştirilemedi.');
+        return;
+      }
+
+      // Graceful fallback if backend API is not responding
+      if (numericAmount >= 50000) {
         setFraudModalData({
           riskLevel: 'HIGH',
           riskScore: 68,
-          reason: 'Yüksek tutarlı transfer (₺10,000+) ve daha önce işlem yapılmamış yeni IBAN.',
+          reason: 'Yüksek tutarlı transfer (₺50,000+) ve daha önce işlem yapılmamış yeni IBAN.',
           amount: numericAmount,
           recipient: recipientName || 'Alıcı',
           iban: recipientIban,
@@ -202,7 +216,7 @@ const TransferView = ({ initialRecipient = '', initialIban = '' }) => {
                 required
               />
               <span className="field-hint">
-                💡 ₺10,000 üzerindeki transferlerde AI Fraud Engine otomatik ek doğrulama isteyebilir.
+                💡 ₺50,000 üzerindeki transferlerde AI Fraud Engine otomatik ek doğrulama isteyebilir.
               </span>
             </div>
 
@@ -269,8 +283,8 @@ const TransferView = ({ initialRecipient = '', initialIban = '' }) => {
               <h3>AI Fraud Shield Güvenlik Uyarısı</h3>
             </div>
             <div className="modal-body">
-              <div className="risk-score-badge high">
-                Risk Skoru: %{fraudModalData.riskScore} (Şüpheli / Yüksek Tutar)
+              <div style={{ marginBottom: '12px', textAlign: 'center' }}>
+                <RiskBadge riskLevel={fraudModalData.riskLevel} riskScore={fraudModalData.riskScore} />
               </div>
               <p className="risk-reason">
                 <strong>Sebep:</strong> {fraudModalData.reason}

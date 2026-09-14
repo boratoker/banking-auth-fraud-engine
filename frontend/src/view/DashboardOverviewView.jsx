@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getOverviewData } from '../api/bankingApi';
 import tokerbankLogo from '../assets/tokerbank-logo.png';
+import { RiskBadge } from '../utils/riskUtils';
 
 const DashboardOverviewView = ({ userName, onNavigate }) => {
   const [showBalances, setShowBalances] = useState(true);
@@ -102,8 +103,8 @@ const DashboardOverviewView = ({ userName, onNavigate }) => {
                 <span className="score-max">/100</span>
               </div>
               <div className="score-info">
-                <h4>Güvenlik Durumu: Mükemmel</h4>
-                <p>Hesabınızda herhangi bir şüpheli girişim tespit edilmedi.</p>
+                <h4>Güvenlik Durumu: {overview.riskStatus || 'Hesaplanıyor...'}</h4>
+                <p>{overview.riskMessage || 'AI Fraud Shield işlem geçmişinizi analiz ediyor.'}</p>
               </div>
             </div>
 
@@ -124,9 +125,6 @@ const DashboardOverviewView = ({ userName, onNavigate }) => {
           </div>
 
           <div className="widget-action">
-            <button className="btn-link" onClick={() => onNavigate('security')}>
-              Güvenlik Loglarını İncele →
-            </button>
           </div>
         </div>
 
@@ -195,9 +193,7 @@ const DashboardOverviewView = ({ userName, onNavigate }) => {
                   <td><span className="tx-category">{tx.category}</span></td>
                   <td><span className="tx-date">{tx.date}</span></td>
                   <td>
-                    <span className="risk-tag safe" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                      <img src={tokerbankLogo} alt="Logo" style={{ width: '14px', height: '14px', objectFit: 'contain' }} /> %{tx.riskScore} Risk (Güvenli)
-                    </span>
+                    <RiskBadge riskLevel={tx.risk} riskScore={tx.riskScore} />
                   </td>
                   <td className={`text-right tx-amount ${tx.amount > 0 ? 'income' : 'expense'}`}>
                     {tx.amount > 0 ? `+${tx.amount.toFixed(2)} ₺` : `${tx.amount.toFixed(2)} ₺`}

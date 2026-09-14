@@ -48,7 +48,7 @@ public class BankingController {
 
     // Demo için yardımcı metod (Authentication kapalı olduğu için)
     private UUID getDemoUserId() {
-        return userRepository.findByEmail("bora@toker.com")
+        return userRepository.findByEmail("toker2003@gmail.com")
                 .map(User::getId)
                 .orElseThrow(() -> new RuntimeException("Demo kullanıcısı veritabanında bulunamadı. Lütfen SQL betiğinin (data.sql) çalıştığından emin olun."));
     }
@@ -93,8 +93,25 @@ public class BankingController {
         data.put("savingsBalance", savingsBalance);
         data.put("creditCardSpent", creditCardSpent);
         data.put("creditCardLimit", creditCardLimit);
-        data.put("riskScore", 98); // AI Overall Shield Score (Demo)
-        data.put("riskStatus", "Safe");
+        List<Transaction> allTxs = bankingService.getUserTransactions(getDemoUserId());
+        double avgRisk = allTxs.stream()
+            .mapToDouble(tx -> tx.getRiskScore() != null ? tx.getRiskScore().doubleValue() : 0.0)
+            .average()
+            .orElse(0.0);
+        int safetyScore = (int) Math.round(100.0 - avgRisk);
+        
+        data.put("riskScore", safetyScore); 
+        
+        if (safetyScore >= 90) {
+            data.put("riskStatus", "Mükemmel");
+            data.put("riskMessage", "Hesabınızda herhangi bir şüpheli girişim tespit edilmedi.");
+        } else if (safetyScore >= 70) {
+            data.put("riskStatus", "İyi");
+            data.put("riskMessage", "Hesabınız genel olarak güvende, ancak ufak çaplı anomaliler izleniyor.");
+        } else {
+            data.put("riskStatus", "Dikkat Gerektiriyor");
+            data.put("riskMessage", "Hesabınızda yüksek riskli işlemler tespit edildi. Lütfen geçmişinizi inceleyin.");
+        }
 
         List<Transaction> recentTxs = bankingService.getUserRecentTransactions(getDemoUserId());
         List<Map<String, Object>> txList = new ArrayList<>();

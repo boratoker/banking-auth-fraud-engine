@@ -1,5 +1,5 @@
 INSERT INTO users (id, email, first_name, last_name, email_verified, password_hash, created_at) VALUES 
-('550e8400-e29b-41d4-a716-446655440000', 'bora@toker.com', 'Bora', 'Toker', true, '$2a$10$.ORHqYI.RUns5/.RPbIoTe5nNnT2qL9.z5O5qgZ3F8Ob3slw9sZxq', NOW()) ON CONFLICT (id) DO NOTHING;
+('550e8400-e29b-41d4-a716-446655440000', 'toker2003@gmail.com', 'Bora', 'Toker', true, '$2a$10$.ORHqYI.RUns5/.RPbIoTe5nNnT2qL9.z5O5qgZ3F8Ob3slw9sZxq', NOW()) ON CONFLICT (id) DO NOTHING;
 INSERT INTO accounts (id, user_id, name, account_number, iban, account_type, currency, balance, status, created_at) VALUES 
 ('caf90266-4111-47a6-b68d-b527b8c8a86a', '550e8400-e29b-41d4-a716-446655440000', 'Ana Vadesiz TL Hesabı', '1000-12345678', 'TR320006100000001234567890', 'DEMAND', 'TRY', 148250.75, 'ACTIVE', NOW()),
 ('35a0cb9a-7cf2-4c04-ba8f-c2512be5f527', '550e8400-e29b-41d4-a716-446655440000', 'Büyüyen Vadeli Birikim', '1000-98765432', 'TR320006100000009876543211', 'TIME_DEPOSIT', 'TRY', 85000.00, 'ACTIVE', NOW()) ON CONFLICT (id) DO NOTHING;

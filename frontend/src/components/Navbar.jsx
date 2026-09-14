@@ -1,8 +1,21 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import tokerbankLogo from '../assets/tokerbank-logo.png';
 import GlobalSearch from './GlobalSearch';
+import { getOverviewData } from '../api/bankingApi';
 
-const Navbar = ({ userName, email, onLogout, userRiskScore = 98, onNavigate }) => {
+const Navbar = ({ userName, email, onLogout, onNavigate }) => {
+  const [userRiskScore, setUserRiskScore] = useState(100);
+  const [riskStatus, setRiskStatus] = useState('Yükleniyor...');
+
+  useEffect(() => {
+    getOverviewData().then(res => {
+      if (res.data && res.data.riskScore !== undefined) {
+        setUserRiskScore(res.data.riskScore);
+        setRiskStatus(res.data.riskStatus || 'Güvenli');
+      }
+    }).catch(err => console.error("Navbar overview fetch error:", err));
+  }, []);
+
   const maskEmail = (str) => {
     if (!str || !str.includes('@')) return str;
     const [user, domain] = str.split('@');
@@ -24,7 +37,7 @@ const Navbar = ({ userName, email, onLogout, userRiskScore = 98, onNavigate }) =
 
       <div className="navbar-right">
         {/* Real-time Fraud Engine Status Badge */}
-        <div className="fraud-status-badge tooltip" title="Canlı yapay zeka dolandırıcılık koruması aktif">
+        <div className="fraud-status-badge tooltip" title={`Güvenlik Durumu: ${riskStatus}`}>
           <span className="pulse-dot"></span>
           <span className="status-label">Fraud Shield Active</span>
           <span className="score-pill">{userRiskScore}/100</span>
