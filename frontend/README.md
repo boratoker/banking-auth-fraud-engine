@@ -11,7 +11,10 @@ frontend/
 ├── src/
 │   ├── api/                     # Backend REST API Entegrasyon Katmanı
 │   │   ├── authApi.js           # E-posta kontrolü, Login, Register, OTP doğrulama API'leri
-│   │   └── bankingApi.js        # Hesaplar, Kartlar, FAST Transfer, Fraud ve Oturum API'leri
+│   │   ├── bankingApi.js        # Hesaplar, Kartlar, FAST Transfer, Fraud ve Oturum API'leri
+│   │   └── signingApi.js        # İşlem İmzalama (WebCrypto ECDSA) ve Cihaz Eşleştirme API'leri
+│   ├── utils/                   # Yardımcı Sınıflar ve Servisler
+│   │   └── CryptoService.js     # WebCrypto API sarmalayıcısı (Anahtar üretimi ve imzalama)
 │   ├── components/              # Yeniden Kullanılabilir Arayüz Bileşenleri
 │   │   ├── Navbar.jsx           # Üst Navigasyon Çubuğu, Canlı Fraud Durumu & Arama
 │   │   └── Sidebar.jsx          # Sol Menü Gezinme Paneli
@@ -50,6 +53,7 @@ frontend/
 - **Canlı 2 Dakikalık Sayaç**: Ekran açıldığında **`⏱ Kalan Süre: 02:00`** formatında canlı geri sayım başlar.
 - **Otomatik Zaman Aşımı Engeli**: 2 dakika dolduğunda doğrulama butonu ve kod giriş alanı pasif hale geçer.
 - **Kodu Tekrar Gönder Butonu**: Süre bittiğinde veya yeni kod istendiğinde *"Kodu Tekrar Gönder"* butonu ile sayaç sıfırlanır (`120s`) ve yeni OTP e-posta ile gönderilir.
+- **Güvenli Şifre Sıfırlama (3 Adımlı Akış)**: Şifre sıfırlama talepleri zamanlama saldırılarına (timing attacks) karşı korunmak için tam asenkron yürütülür. (E-Posta Onayı -> OTP Bekleme -> Yeni Şifre).
 
 ### 💳 2. Sanal Kart & Güvenlik Ayarları (`AccountsView.jsx`)
 - **Canlı Sanal Kart Görseli**: Platinum Sanal Kart numarası, CVV ve son kullanma tarihi dinamik olarak görüntülenir.
@@ -62,7 +66,11 @@ frontend/
 - **Yapay Zeka Risk Analizi Modalı**: Transfer tutarı ₺10.000 üzerindeyse backend'den gelen `%68 Risk` uyarısıyla şık bir **AI Fraud Shield Modal** açılır.
 - **2FA SMS/OTP Onay Ekranı**: Şüpheli işlem için kullanıcıya ek güvenlik kodu şartı koşulur, onay verilirse işlem gerçekleşir.
 
-### 🔑 4. Güvenlik & Oturum Takibi (`SecurityView.jsx`)
+### 🖋️ 4. İşlem İmzalama & WebCrypto (PSD2 SCA)
+- **Donanımsal Anahtar Üretimi**: Tarayıcının WebCrypto API'si ile `ECDSA P-256` şifreleme anahtarları cihazda üretilir.
+- **İnteraktif Hacker Modu**: Transfer sırasında veri paketini yolda (payload) manipüle ederek backend'in asimetrik şifreleme (Digital Signature) ile bunu nasıl reddettiği canlı olarak simüle edilebilir.
+
+### 🔑 5. Güvenlik & Oturum Takibi (`SecurityView.jsx`)
 - **Cihaz Parmak İzi & Konum**: Hesaba bağlı cihazlar (macOS, iPhone, Windows), IP adresleri ve şehir bilgisi listelenir.
 - **Tek Tıkla Oturum Sonlandırma**: Şüpheli cihazların oturumu anında kapatılabilir.
 

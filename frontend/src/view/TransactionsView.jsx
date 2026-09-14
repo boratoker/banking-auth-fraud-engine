@@ -3,6 +3,8 @@ import { getTransactions } from '../api/bankingApi';
 import tokerbankLogo from '../assets/tokerbank-logo.png';
 import { normalizeTurkish } from '../utils/textUtils';
 import { RiskBadge, getRiskBadgeInfo, parseRiskScore } from '../utils/riskUtils';
+import { enrollDevice, verifySignature } from '../api/signingApi';
+import { generateAndEnrollKeyPair, hasEnrolledKey, signPayload } from '../utils/CryptoService';
 
 const TransactionsView = ({ initialSearchTerm = '' }) => {
   const [searchTerm, setSearchTerm] = useState(initialSearchTerm || '');
@@ -10,6 +12,18 @@ const TransactionsView = ({ initialSearchTerm = '' }) => {
   const [selectedRisk, setSelectedRisk] = useState('ALL');
 
   const [allTransactions, setAllTransactions] = useState([]);
+  
+  // Transaction Signing State
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [transferAmount, setTransferAmount] = useState('');
+  const [transferIban, setTransferIban] = useState('');
+  const [isEnrolled, setIsEnrolled] = useState(false);
+  const [signingLog, setSigningLog] = useState([]);
+  const [isHackerMode, setIsHackerMode] = useState(false);
+
+  useEffect(() => {
+    setIsEnrolled(hasEnrolledKey());
+  }, []);
 
   useEffect(() => {
     if (initialSearchTerm !== undefined) {
@@ -43,12 +57,127 @@ const TransactionsView = ({ initialSearchTerm = '' }) => {
     return matchesSearch && matchesCategory && matchesRisk;
   });
 
+  const handleEnrollDevice = async () => {
+    try {
+      const userStr = localStorage.getItem('user');
+      if (!userStr) { alert("Kullanıcı bilgisi bulunamadı."); return; }
+      const user = JSON.parse(userStr);
+
+      const result = await generateAndEnrollKeyPair();
+      if (result.success) {
+        await enrollDevice(user.id, result.publicKey, "Web Tarayıcı");
+        setIsEnrolled(true);
+        alert("Cihazınız kriptografik işlem imzalama (WebCrypto) için başarıyla kaydedildi!");
+      } else {
+        alert("Hata: " + result.error);
+      }
+    } catch (err) {
+      alert("Sunucu hatası: " + err.message);
+    }
+  };
+
+  const handleSignTransaction = async () => {
+    try {
+      setSigningLog([]);
+      const userStr = localStorage.getItem('user');
+      if (!userStr) return;
+      const user = JSON.parse(userStr);
+
+      if (!transferAmount || !transferIban) {
+        alert("Lütfen IBAN ve Tutar giriniz."); return;
+      }
+
+      // Payload oluştur
+      const rawPayload = `IBAN:${transferIban},AMOUNT:${transferAmount}`;
+      
+      setSigningLog(prev => [...prev, `[SİSTEM] Orijinal Veri: ${rawPayload}`]);
+      setSigningLog(prev => [...prev, `[SİSTEM] WebCrypto (ECDSA P-256) ile imzalanıyor...`]);
+
+      const signRes = await signPayload(rawPayload);
+      if (!signRes.success) { alert("İmzalama hatası."); return; }
+
+      const signature = signRes.signature;
+      setSigningLog(prev => [...prev, `[İMZA] ${signature.substring(0, 40)}...`]);
+
+      // Hacker modu: Veriyi yolda değiştir
+      let payloadToSend = rawPayload;
+      if (isHackerMode) {
+        payloadToSend = `IBAN:${transferIban},AMOUNT:9999999`;
+        setSigningLog(prev => [...prev, `🚨 [HACKER] Veri yolda manipüle edildi: ${payloadToSend}`]);
+      }
+
+      setSigningLog(prev => [...prev, `[SUNUCU] İmzalanan veri sunucuya doğrulanmak üzere gönderiliyor...`]);
+      
+      try {
+        const verifyRes = await verifySignature(user.id, payloadToSend, signature);
+        setSigningLog(prev => [...prev, `✅ [BAŞARILI] ${verifyRes.data.message}`]);
+      } catch (err) {
+        const errMsg = err.response?.data?.error || err.message;
+        setSigningLog(prev => [...prev, `❌ [REDDEDİLDİ] ${errMsg}`]);
+      }
+
+    } catch (err) {
+      setSigningLog(prev => [...prev, `[HATA] ${err.message}`]);
+    }
+  };
+
   return (
     <div className="view-container transactions-view">
-      <div className="view-header">
-        <h2>Hesap Hareketleri & Raporlar</h2>
-        <p>Gelen/giden tüm transferler, kart harcamaları ve AI Fraud Shield doğrulama durumları.</p>
+      <div className="view-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <h2>Hesap Hareketleri & Raporlar</h2>
+          <p>Gelen/giden tüm transferler, kart harcamaları ve AI Fraud Shield doğrulama durumları.</p>
+        </div>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          {!isEnrolled ? (
+            <button className="btn btn-secondary" onClick={handleEnrollDevice}>
+              🛡️ Cihazı Güvenilir Olarak Kaydet (Enroll)
+            </button>
+          ) : (
+            <button className="btn btn-primary" onClick={() => setShowTransferModal(true)}>
+              💸 Yeni Transfer Yap
+            </button>
+          )}
+        </div>
       </div>
+
+      {showTransferModal && (
+        <div className="modal-overlay" onClick={() => setShowTransferModal(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{maxWidth: '600px'}}>
+            <h3>Kriptografik İşlem İmzalama (Demo)</h3>
+            <p className="text-muted" style={{fontSize: '14px', marginBottom: '1rem'}}>
+              PSD2 SCA (Strong Customer Authentication) kapsamında, bu transfer tarayıcınızın WebCrypto donanımı tarafından <strong>asimetrik şifreleme (ECDSA P-256)</strong> ile imzalanacaktır.
+            </p>
+            
+            <div className="form-group">
+              <label>Alıcı IBAN</label>
+              <input type="text" className="form-input" placeholder="TR..." value={transferIban} onChange={e => setTransferIban(e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label>Tutar (₺)</label>
+              <input type="number" className="form-input" placeholder="1000" value={transferAmount} onChange={e => setTransferAmount(e.target.value)} />
+            </div>
+            <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '10px' }}>
+              <input type="checkbox" id="hackerMode" checked={isHackerMode} onChange={e => setIsHackerMode(e.target.checked)} />
+              <label htmlFor="hackerMode" style={{ color: 'red', fontWeight: 'bold', margin: 0 }}>🚨 Hacker Modu (Veriyi Yolda 9999999 ₺ Olarak Değiştir)</label>
+            </div>
+
+            <button className="btn btn-primary" style={{width: '100%', marginTop: '1rem'}} onClick={handleSignTransaction}>
+              İmzala ve Gönder
+            </button>
+
+            {signingLog.length > 0 && (
+              <div style={{ marginTop: '1rem', background: '#1e1e1e', color: '#00ff00', padding: '1rem', borderRadius: '8px', fontFamily: 'monospace', fontSize: '12px', whiteSpace: 'pre-wrap', maxHeight: '200px', overflowY: 'auto' }}>
+                {signingLog.map((log, i) => (
+                  <div key={i} style={{ color: log.includes('❌') || log.includes('🚨') ? '#ff4444' : '#00ff00' }}>
+                    {log}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Analytics Summary */}
       <div className="metrics-grid">

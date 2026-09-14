@@ -32,7 +32,13 @@ Proje; bağımsız ölçeklenebilir Spring Boot mikroservisleri, olay tabanlı (
                   │  └──────────┬───────────┘    └───────────▲───────────┘  │
                   └─────────────┼────────────────────────────┼──────────────┘
                                 │                            │
-         ┌──────────────────────┴──────────────┬─────────────┴────────┐
+                                ▼                            │
+                  ┌─────────────────────────────────────────────────────────┐
+                  │          Transaction Signing Service (WebCrypto)        │
+                  │               (http://localhost:8083)                   │
+                  └─────────────────────────────┬───────────────────────────┘
+                                                │
+         ┌──────────────────────┴───────────────┴────────────┴────────┐
          ▼                                     ▼                      ▼
 ┌──────────────────┐                  ┌──────────────────┐  ┌──────────────────┐
 │   PostgreSQL     │                  │   Apache Kafka   │  │  Python ML Train │
@@ -71,6 +77,7 @@ Proje; bağımsız ölçeklenebilir Spring Boot mikroservisleri, olay tabanlı (
 | :--- | :--- | :--- | :--- |
 | **API Gateway** | [http://localhost:8080](http://localhost:8080) | `8080` | Frontend isteklerinin tek giriş kapısı (Reverse Proxy & CORS) |
 | **Auth & Banking Service** | [http://localhost:8081](http://localhost:8081) | `8081` | Kimlik doğrulama, hesaplar, kartlar, transferler ve AI Fraud Engine |
+| **Transaction Signing Service** | [http://localhost:8083](http://localhost:8083) | `8083` | WebCrypto Asimetrik (ECDSA) işlem imzalama ve cihaz eşleştirme |
 | **Python Fraud ML Pipeline** | `backend/fraud-service` | Local CLI | 50.000 sentetik veri ile model eğitimi ve ONNX export betiği |
 
 ---
@@ -108,13 +115,20 @@ Spring Boot (Backend) ilk defa başlatıldığında arka planda `data.sql` beti�
 ## 📡 Temel API Endpoint Özeti (Gateway: `http://localhost:8080`)
 
 ### 1. Kimlik Doğrulama (`/api/v1/auth`)
-- `POST /api/v1/auth/check-email` — E-postanın kayıtlı olup olmadığını kontrol eder.
+- `POST /api/v1/auth/check-email` — E-postanın kayıtlı olup olmadığını kontrol eder (Zamanlama saldırılarına karşı korumalıdır).
 - `POST /api/v1/auth/verify-password` — Şifreli kimlik doğrulama sağlar.
 - `POST /api/v1/auth/login` — 2FA OTP kodu üretir ve e-posta ile iletir.
 - `POST /api/v1/auth/register` — Yeni kullanıcı kaydı oluşturur ve doğrulama kodu yollar.
 - `POST /api/v1/auth/verify-otp` — 2 dakikalık OTP kodunu doğrular (JWT oturumu başlatır).
+- `POST /api/v1/auth/forgot-password/init` — E-posta doğrulaması (Asenkron).
+- `POST /api/v1/auth/forgot-password/verify-otp` — Şifre sıfırlama için OTP doğrulaması (OTP silinmez).
+- `POST /api/v1/auth/forgot-password/reset` — Yeni şifreyi asenkron kaydeder.
 
-### 2. Çekirdek Bankacılık (`/api/v1/banking`)
+### 2. İşlem İmzalama & Kriptografi (`/api/v1/signing`)
+- `POST /api/v1/signing/enroll` — Tarayıcı WebCrypto donanımında üretilen cihaz Public Key'ini (Açık Anahtar) veritabanına kaydeder.
+- `POST /api/v1/signing/verify` — Asimetrik imzalanmış (ECDSA) transfer verisini Public Key ile doğrular (Tampering koruması).
+
+### 3. Çekirdek Bankacılık (`/api/v1/banking`)
 - `GET /api/v1/banking/overview` — Kullanıcının hesap bakiyeleri, kartları, son hareketleri ve risk skorunu döner.
 - `GET /api/v1/banking/accounts` — Kullanıcının tüm vadeli, vadesiz, döviz ve altın hesaplarını listeler.
 - `GET /api/v1/banking/cards` — Kullanıcının kartlarını, kalan limitlerini ve güvenlik durumlarını getirir.
@@ -167,6 +181,7 @@ Her para transferinde kullanıcının geçmiş 30 günlük veritabanı hareketle
 - **`cards`**: Sanal/fiziksel kartlar, CVV, son kullanma, kart dondurma (`is_frozen`), e-ticaret ve yurt dışı izinleri, harcama limitleri.
 - **`transactions`**: FAST/EFT işlem kayıtları, transfer durumu (`COMPLETED`, `OTP_CHALLENGED`, `REJECTED`), hesaplanan risk skoru ve seviyesi.
 - **`user_sessions`**: Aktif cihazlar, tarayıcı bilgisi, IP adresi, şehir/ülke konumu ve son aktiflik zamanı.
+- **`user_public_keys`**: Cihaz eşleştirme ile oluşturulan tarayıcı kriptografik Public Key'lerini saklar (İşlem imzalama servisi).
 - **`fraud_models`**: Sisteme yüklenen ONNX / ML modellerinin versiyonları, algoritmaları ve doğruluk (F1 / Accuracy) oranları.
 - **`fraud_evaluations`**: Her işlem için çıkarılan 18 özellik, tetiklenen kural bayrakları, model puanları ve karar geçmişi.
 - **`audit_logs`**: Asenkron Kafka tüketicisi tarafından yazılan güvenlik denetim kayıtları.

@@ -34,7 +34,14 @@ Bu dizin, **TokerBank Enterprise Banking & AI Fraud Engine** sisteminin çekirde
                            └─────────────────────┼──────────────────┘
                                                  │
                   ┌──────────────────────────────┼──────────────────────────────┐
+                  │                              │                              │
                   ▼                              ▼                              ▼
+      ┌───────────────────────┐                                                 
+      │ Transaction Signing   │                                                 
+      │      (Port: 8083)     │                                                 
+      └───────────┬───────────┘                                                 
+                  │                                                             
+                  ▼                                                             
        ┌────────────────────┐         ┌────────────────────┐         ┌────────────────────┐
        │     PostgreSQL     │         │    Apache Kafka    │         │      RabbitMQ      │
        │    (Port: 5432)    │         │    (Port: 9092)    │         │    (Port: 5672)    │
@@ -58,6 +65,7 @@ Bu dizin, **TokerBank Enterprise Banking & AI Fraud Engine** sisteminin çekirde
 | :--- | :--- | :--- |
 | **`api-gateway/`** | Spring Cloud Gateway, Reactive Web | Tek giriş kapısı, rotalama, CORS ve hız sınırlama |
 | **`auth-service/`** | Spring Boot 3.2, JPA, Hibernate, Kafka, AMQP | Çekirdek bankacılık, kimlik doğrulama, concurrency yönetimi ve Java ML çıkarım motoru |
+| **`signing-service/`** | Spring Boot 3.2, JPA, WebCrypto (ECDSA) | İşlem imzalama, PSD2 donanım asimetrik doğrulama mikroservisi |
 | **`fraud-service/`** | Python 3.10+, Scikit-Learn, XGBoost, ONNX | 50.000 sentetik işlemle model eğitimi ve ONNX dışa aktarım aracı |
 
 ---
@@ -128,6 +136,14 @@ Her bir transfer için AI motoru tarafından üretilen tüm alt metrikleri sakla
 - `action_taken` (`APPROVE`, `FLAG`, `CHALLENGE_OTP`, `BLOCK`)
 - `execution_time_ms` (BIGINT - Çıkarım gecikme süresi, örn: 3 ms)
 
+### 6. `user_public_keys` Tablosu
+Cihaz eşleştirme (Enrollment) ile oluşturulan tarayıcı kriptografik Public Key'lerini saklar (İşlem imzalama servisi).
+- `id` (BIGINT, PK)
+- `user_id` (BIGINT)
+- `public_key` (TEXT)
+- `device_name` (VARCHAR)
+- `created_at` (TIMESTAMP)
+
 ---
 
 ## 🧠 AI Fraud Shield - 18 Gerçek Zamanlı Özellik & Skorlama
@@ -189,6 +205,21 @@ double[] features = new double[] {
 - **Request**: `{"email": "bora@toker.com", "otp": "123456", "mode": "login"}`
 - **Response**: `{"token": "jwt_token...", "user": { ... }}`
 
+#### Şifremi Unuttum Başlatma (Asenkron)
+- **URL**: `POST /api/v1/auth/forgot-password/init`
+- **Request**: `{"email": "bora@toker.com"}`
+- **Response**: `{"message": "Eğer kayıtlı bir e-posta adresi ise, doğrulama kodu gönderildi", "ttl": 120}` (Güvenlik amaçlı her zaman başarılı döner)
+
+#### Şifremi Unuttum OTP Doğrulama
+- **URL**: `POST /api/v1/auth/forgot-password/verify-otp`
+- **Request**: `{"email": "bora@toker.com", "otp": "123456"}`
+- **Response**: `{"message": "OTP doğrulandı, yeni şifre belirleyebilirsiniz", "token": "temp_token..."}`
+
+#### Yeni Şifre Kaydetme
+- **URL**: `POST /api/v1/auth/forgot-password/reset`
+- **Request**: `{"email": "bora@toker.com", "newPassword": "...", "otp": "123456"}`
+- **Response**: `{"message": "Şifreniz başarıyla güncellendi"}`
+
 ---
 
 ### 💳 2. Bankacılık & Kartlar (`/api/v1/banking`)
@@ -247,6 +278,35 @@ double[] features = new double[] {
 }
 ```
 - **Response**: `{"status": "COMPLETED", "message": "Transfer başarıyla tamamlandı."}`
+
+---
+
+### 🖋️ 4. İşlem İmzalama & Kriptografi (`/api/v1/signing`)
+
+#### Cihaz Eşleştirme (Enroll)
+- **URL**: `POST /api/v1/signing/enroll`
+- **Request**:
+```json
+{
+  "userId": 1,
+  "publicKey": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgk...",
+  "deviceName": "Web Tarayıcı"
+}
+```
+- **Response**: `{"message": "Cihazınız başarıyla eşleştirildi."}`
+
+#### Transfer Verisi İmza Doğrulama
+- **URL**: `POST /api/v1/signing/verify`
+- **Request**:
+```json
+{
+  "userId": 1,
+  "payload": "IBAN:TR123...,AMOUNT:1000",
+  "signature": "base64_encoded_ecdsa_signature..."
+}
+```
+- **Response (Başarılı)**: `{"valid": true, "message": "Signature is valid. Transaction approved."}`
+- **Response (Hatalı/Manipüle Edilmiş)**: `{"error": "Invalid cryptographic signature. Fraud detected or payload tampered."}` (HTTP 401)
 
 ---
 

@@ -26,3 +26,9 @@ replay_pid*
 smtp.txt
 
 node_modules
+
+.env
+target/
+.idea/
+.vscode/
+*.iml
