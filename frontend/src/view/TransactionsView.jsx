@@ -2,12 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { getTransactions } from '../api/bankingApi';
 import tokerbankLogo from '../assets/tokerbank-logo.png';
 
-const TransactionsView = () => {
-  const [searchTerm, setSearchTerm] = useState('');
+const TransactionsView = ({ initialSearchTerm = '' }) => {
+  const [searchTerm, setSearchTerm] = useState(initialSearchTerm || '');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [selectedRisk, setSelectedRisk] = useState('ALL');
 
   const [allTransactions, setAllTransactions] = useState([]);
+
+  useEffect(() => {
+    if (initialSearchTerm !== undefined) {
+      setSearchTerm(initialSearchTerm || '');
+    }
+  }, [initialSearchTerm]);
 
   const formatCurrency = (val) => {
     return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(val || 0);

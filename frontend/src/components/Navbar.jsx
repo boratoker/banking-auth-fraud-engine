@@ -1,7 +1,8 @@
 import React from 'react';
 import tokerbankLogo from '../assets/tokerbank-logo.png';
+import GlobalSearch from './GlobalSearch';
 
-const Navbar = ({ userName, email, onLogout, userRiskScore = 98 }) => {
+const Navbar = ({ userName, email, onLogout, userRiskScore = 98, onNavigate }) => {
   const maskEmail = (str) => {
     if (!str || !str.includes('@')) return str;
     const [user, domain] = str.split('@');
@@ -19,14 +20,7 @@ const Navbar = ({ userName, email, onLogout, userRiskScore = 98 }) => {
         </div>
       </div>
 
-      <div className="navbar-search">
-        <span className="search-icon">🔍</span>
-        <input
-          type="text"
-          placeholder="Hesap, transfer veya işlem ara..."
-          className="search-input"
-        />
-      </div>
+      <GlobalSearch onNavigate={onNavigate} />
 
       <div className="navbar-right">
         {/* Real-time Fraud Engine Status Badge */}

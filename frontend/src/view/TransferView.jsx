@@ -2,12 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { submitTransfer, verifyTransferOtp, getContacts } from '../api/bankingApi';
 import tokerbankLogo from '../assets/tokerbank-logo.png';
 
-const TransferView = () => {
-  const [recipientIban, setRecipientIban] = useState('');
-  const [recipientName, setRecipientName] = useState('');
+const TransferView = ({ initialRecipient = '', initialIban = '' }) => {
+  const [recipientIban, setRecipientIban] = useState(initialIban || '');
+  const [recipientName, setRecipientName] = useState(initialRecipient || '');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [selectedAccount, setSelectedAccount] = useState('TR320006100000001234567890');
+
+  useEffect(() => {
+    if (initialIban) setRecipientIban(initialIban);
+    if (initialRecipient) setRecipientName(initialRecipient);
+  }, [initialRecipient, initialIban]);
 
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
