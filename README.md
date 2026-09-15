@@ -100,15 +100,15 @@ Proje; bağımsız ölçeklenebilir Spring Boot mikroservisleri, olay tabanlı (
 
 Spring Boot (Backend) ilk defa başlatıldığında arka planda `data.sql` betiği devreye girerek veritabanını aşağıdaki demo verilerle doldurur:
 
-- **E-Posta**: `bora@toker.com`
-- **Şifre**: `12345678`
+- **E-Posta**: `toker2003@gmail.com`
+- **Giriş Yöntemi**: Sistemde tanımlı şifreniz ile veya şifresiz OTP (E-posta doğrulama) ile giriş yapılabilir.
 - **Hesaplar**:
-  - ₺ Vadesiz TL Hesabı (`TR33 0006 1005 1234 5678 9012 34`) — Bakiye: `₺128,450.00`
-  - 🟡 Altın Yatırım Hesabı (`TR33 0006 1005 9876 5432 1098 76`) — Bakiye: `₺45,200.00`
-  - 💵 USD Döviz Hesabı (`TR33 0006 1005 5544 3322 1100 99`) — Bakiye: `$3,420.00`
-  - 📈 Vadeli Birikim Hesabı (`TR33 0006 1005 7788 9900 1122 33`) — Bakiye: `₺250,000.00` (%48.5 Faiz)
+  - Ana Vadesiz TL Hesabı (`TR32 0006 1000 0000 1234 5678 90`) — Bakiye: `₺148,250.75`
+  - Büyüyen Vadeli Birikim (`TR32 0006 1000 0000 9876 5432 11`) — Bakiye: `₺85,000.00`
 - **Kartlar**:
-  - Toker Platinum Sanal Kart (`**** **** **** 8842`) — Limit: `₺50,000.00`
+  - Toker Platinum Sanal Kart (VIRTUAL) (`**** **** **** 8819`) — Limit: `₺100,000.00`
+  - Toker Kredi Kartı (CREDIT) (`**** **** **** 4421`) — Limit: `₺50,000.00`
+  - Toker Banka Kartı (DEBIT) (`**** **** **** 9912`) — Hesap Bağlantılı
 
 ---
 
@@ -232,7 +232,7 @@ mvn clean spring-boot:run
 cd backend/auth-service
 mvn clean spring-boot:run
 ```
-> *Not: Veritabanı ilk başlatıldığında, sistem `data.sql` dosyasını kullanarak veritabanına `bora@toker.com` / `12345678` kullanıcısını ve demo hesap verilerini otomatik yazar. Kod (Controller vb.) içinde sahte/gömülü (mock) veri barındırılmaz.*
+> *Not: Veritabanı ilk başlatıldığında, sistem `data.sql` dosyasını kullanarak veritabanına `toker2003@gmail.com` kullanıcısını ve demo hesap verilerini otomatik yazar. Kod (Controller vb.) içinde sahte/gömülü (mock) veri barındırılmaz.*
 
 ### 4. Web Frontend'i Başlatın (React + Vite)
 ```bash

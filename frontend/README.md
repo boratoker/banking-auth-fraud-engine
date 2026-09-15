@@ -55,22 +55,27 @@ frontend/
 - **Kodu Tekrar Gönder Butonu**: Süre bittiğinde veya yeni kod istendiğinde *"Kodu Tekrar Gönder"* butonu ile sayaç sıfırlanır (`120s`) ve yeni OTP e-posta ile gönderilir.
 - **Güvenli Şifre Sıfırlama (3 Adımlı Akış)**: Şifre sıfırlama talepleri zamanlama saldırılarına (timing attacks) karşı korunmak için tam asenkron yürütülür. (E-Posta Onayı -> OTP Bekleme -> Yeni Şifre).
 
-### 💳 2. Sanal Kart & Güvenlik Ayarları (`AccountsView.jsx`)
-- **Canlı Sanal Kart Görseli**: Platinum Sanal Kart numarası, CVV ve son kullanma tarihi dinamik olarak görüntülenir.
+### 💳 2. Çoklu Kart Yönetimi & Karusel (`AccountsView.jsx`)
+- **Dinamik Kart Karuseli (Slideshow)**: Kullanıcının sahip olduğu tüm kartlar (Sanal, Kredi, Banka) arasında kaydırılabilir karusel arayüzü ile geçiş imkanı.
+- **Kart Türüne Göre Dinamik Tasarım**: VIRTUAL kartlar için premium siyah, CREDIT kartlar için lüks altın (Gold), DEBIT kartlar için mavi temalı CSS gradyan tasarımları. Gerçek kredi kartı ebatlarına (1.586 aspect-ratio) duyarlı responsive yapı.
 - **Anlık Kart Dondurma Switch'i**: Kart dondurulduğunda kart üzeri buzlu kilit efekti (`Card Frozen Overlay`) aktif olur ve tüm harcama izinleri engellenir.
-- **İnternet & Yurt Dışı İzinleri**: E-ticaret ve yurt dışı harcama switch'leri anında backend ile senkronize olur.
-- **IBAN Kopyalama**: Tek tıkla IBAN kopyalama ve *"✓ Kopyalandı"* görsel uyarısı.
+- **İnternet & Yurt Dışı İzinleri**: E-ticaret ve yurt dışı harcama izinleri yönetilebilir. Kredi kartları için anlık harcama limit çubukları dinamik olarak çalışır.
+- **Hesap Listesi & IBAN Kopyalama**: Vadesiz, vadeli ve döviz hesapları alt alta listelenir, tek tıkla IBAN kopyalama desteği sunar.
 
-### 🛡️ 3. FAST Transfer & AI Fraud Risk Modalı (`TransferView.jsx`)
+### 🔍 3. Küresel Arama Çubuğu (Global Search)
+- **Hızlı Erişim (CMD+K)**: Navigasyon çubuğundaki arama bölümü ile tüm uygulama içi menülere hızlıca erişim sağlanır.
+- **Türkçe Karakter Uyumlu Arama**: `normalizeTurkish` utils fonksiyonu ile büyük/küçük harf ve Türkçe/İngilizce karakter duyarlılığı olmadan pürüzsüz arama yeteneği.
+
+### 🛡️ 4. FAST Transfer & AI Fraud Risk Modalı (`TransferView.jsx`)
 - **Hızlı Transfer Formu**: Kayıtlı kişiler veya IBAN ile FAST transfer başlatılır.
 - **Yapay Zeka Risk Analizi Modalı**: Transfer tutarı ₺10.000 üzerindeyse backend'den gelen `%68 Risk` uyarısıyla şık bir **AI Fraud Shield Modal** açılır.
 - **2FA SMS/OTP Onay Ekranı**: Şüpheli işlem için kullanıcıya ek güvenlik kodu şartı koşulur, onay verilirse işlem gerçekleşir.
 
-### 🖋️ 4. İşlem İmzalama & WebCrypto (PSD2 SCA)
+### 🖋️ 5. İşlem İmzalama & WebCrypto (PSD2 SCA)
 - **Donanımsal Anahtar Üretimi**: Tarayıcının WebCrypto API'si ile `ECDSA P-256` şifreleme anahtarları cihazda üretilir.
 - **İnteraktif Hacker Modu**: Transfer sırasında veri paketini yolda (payload) manipüle ederek backend'in asimetrik şifreleme (Digital Signature) ile bunu nasıl reddettiği canlı olarak simüle edilebilir.
 
-### 🔑 5. Güvenlik & Oturum Takibi (`SecurityView.jsx`)
+### 🔑 6. Güvenlik & Oturum Takibi (`SecurityView.jsx`)
 - **Cihaz Parmak İzi & Konum**: Hesaba bağlı cihazlar (macOS, iPhone, Windows), IP adresleri ve şehir bilgisi listelenir.
 - **Tek Tıkla Oturum Sonlandırma**: Şüpheli cihazların oturumu anında kapatılabilir.
 

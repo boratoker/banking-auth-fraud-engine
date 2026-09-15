@@ -187,37 +187,37 @@ double[] features = new double[] {
 
 #### E-Posta Kontrolü
 - **URL**: `POST /api/v1/auth/check-email`
-- **Request**: `{"email": "bora@toker.com"}`
-- **Response**: `{"exists": true, "email": "bora@toker.com"}`
+- **Request**: `{"email": "toker2003@gmail.com"}`
+- **Response**: `{"exists": true, "email": "toker2003@gmail.com"}`
 
 #### Şifre Doğrulama
 - **URL**: `POST /api/v1/auth/verify-password`
-- **Request**: `{"email": "bora@toker.com", "password": "..."}`
+- **Request**: `{"email": "toker2003@gmail.com", "password": "..."}`
 - **Response**: `{"verified": true, "user": { ... }}`
 
 #### OTP Başlatma / Giriş
 - **URL**: `POST /api/v1/auth/login`
-- **Request**: `{"email": "bora@toker.com"}`
+- **Request**: `{"email": "toker2003@gmail.com"}`
 - **Response**: `{"message": "Doğrulama kodu e-posta adresinize iletildi", "ttl": 120}`
 
 #### OTP Doğrulama
 - **URL**: `POST /api/v1/auth/verify-otp`
-- **Request**: `{"email": "bora@toker.com", "otp": "123456", "mode": "login"}`
+- **Request**: `{"email": "toker2003@gmail.com", "otp": "123456", "mode": "login"}`
 - **Response**: `{"token": "jwt_token...", "user": { ... }}`
 
 #### Şifremi Unuttum Başlatma (Asenkron)
 - **URL**: `POST /api/v1/auth/forgot-password/init`
-- **Request**: `{"email": "bora@toker.com"}`
+- **Request**: `{"email": "toker2003@gmail.com"}`
 - **Response**: `{"message": "Eğer kayıtlı bir e-posta adresi ise, doğrulama kodu gönderildi", "ttl": 120}` (Güvenlik amaçlı her zaman başarılı döner)
 
 #### Şifremi Unuttum OTP Doğrulama
 - **URL**: `POST /api/v1/auth/forgot-password/verify-otp`
-- **Request**: `{"email": "bora@toker.com", "otp": "123456"}`
+- **Request**: `{"email": "toker2003@gmail.com", "otp": "123456"}`
 - **Response**: `{"message": "OTP doğrulandı, yeni şifre belirleyebilirsiniz", "token": "temp_token..."}`
 
 #### Yeni Şifre Kaydetme
 - **URL**: `POST /api/v1/auth/forgot-password/reset`
-- **Request**: `{"email": "bora@toker.com", "newPassword": "...", "otp": "123456"}`
+- **Request**: `{"email": "toker2003@gmail.com", "newPassword": "...", "otp": "123456"}`
 - **Response**: `{"message": "Şifreniz başarıyla güncellendi"}`
 
 ---
