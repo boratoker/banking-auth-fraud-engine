@@ -3,7 +3,9 @@ package com.banking.auth.controller;
 import com.banking.auth.model.*;
 import com.banking.auth.repository.*;
 import com.banking.auth.service.BankingService;
+import com.banking.auth.service.EmailService;
 import jakarta.annotation.PostConstruct;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -29,6 +31,13 @@ public class BankingController {
     private final UserSessionRepository sessionRepository;
     private final TransactionRepository transactionRepository;
     private final BeneficiaryContactRepository contactRepository;
+    private final SecuritySettingsRepository securitySettingsRepository;
+    private final EmailService emailService;
+    
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private StringRedisTemplate redisTemplate;
+
+    private final java.util.Map<String, String> fallbackCache = new java.util.concurrent.ConcurrentHashMap<>();
 
     public BankingController(BankingService bankingService,
                              UserRepository userRepository,
@@ -36,7 +45,9 @@ public class BankingController {
                              CardRepository cardRepository,
                              UserSessionRepository sessionRepository,
                              TransactionRepository transactionRepository,
-                             BeneficiaryContactRepository contactRepository) {
+                             BeneficiaryContactRepository contactRepository,
+                             SecuritySettingsRepository securitySettingsRepository,
+                             EmailService emailService) {
         this.bankingService = bankingService;
         this.userRepository = userRepository;
         this.accountRepository = accountRepository;
@@ -44,6 +55,8 @@ public class BankingController {
         this.sessionRepository = sessionRepository;
         this.transactionRepository = transactionRepository;
         this.contactRepository = contactRepository;
+        this.securitySettingsRepository = securitySettingsRepository;
+        this.emailService = emailService;
     }
 
     // Demo için yardımcı metod (Authentication kapalı olduğu için)
@@ -544,5 +557,164 @@ public class BankingController {
             res.add(t);
         }
         return ResponseEntity.ok(res);
+    }
+
+    // --- GET /api/v1/banking/security/settings ---
+    @GetMapping("/security/settings")
+    public ResponseEntity<Map<String, Object>> getSecuritySettings() {
+        UUID userId = getDemoUserId();
+        UserSecuritySettings settings = securitySettingsRepository.findByUserId(userId).orElseGet(() -> {
+            UserSecuritySettings newSettings = new UserSecuritySettings();
+            newSettings.setUser(userRepository.findById(userId).orElseThrow());
+            return securitySettingsRepository.save(newSettings);
+        });
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("twoFactorEnabled", settings.isTwoFactorEnabled());
+        res.put("biometricsEnabled", settings.isBiometricsEnabled());
+        res.put("fraudAlertsEnabled", settings.isFraudAlertsEnabled());
+        res.put("dailyTransferLimit", settings.getDailyTransferLimit());
+        res.put("dailySpentToday", settings.getDailySpentToday());
+        
+        return ResponseEntity.ok(res);
+    }
+
+    // --- PUT /api/v1/banking/security/settings ---
+    @PutMapping("/security/settings")
+    public ResponseEntity<Map<String, Object>> updateSecuritySettings(@RequestBody Map<String, Object> updates) {
+        UUID userId = getDemoUserId();
+        UserSecuritySettings settings = securitySettingsRepository.findByUserId(userId).orElseGet(() -> {
+            UserSecuritySettings newSettings = new UserSecuritySettings();
+            newSettings.setUser(userRepository.findById(userId).orElseThrow());
+            return securitySettingsRepository.save(newSettings);
+        });
+
+        // twoFactorEnabled artık her zaman true varsayılır veya ön yüz görmezden gelir.
+        if (updates.containsKey("biometricsEnabled")) {
+            settings.setBiometricsEnabled((Boolean) updates.get("biometricsEnabled"));
+        }
+        if (updates.containsKey("fraudAlertsEnabled")) {
+            settings.setFraudAlertsEnabled((Boolean) updates.get("fraudAlertsEnabled"));
+        }
+        if (updates.containsKey("dailyTransferLimit")) {
+            Object limitObj = updates.get("dailyTransferLimit");
+            if (limitObj instanceof Number) {
+                settings.setDailyTransferLimit(new BigDecimal(limitObj.toString()));
+            } else if (limitObj instanceof String) {
+                settings.setDailyTransferLimit(new BigDecimal((String) limitObj));
+            }
+        }
+
+        settings = securitySettingsRepository.save(settings);
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("biometricsEnabled", settings.isBiometricsEnabled());
+        res.put("fraudAlertsEnabled", settings.isFraudAlertsEnabled());
+        res.put("dailyTransferLimit", settings.getDailyTransferLimit());
+        res.put("dailySpentToday", settings.getDailySpentToday());
+        
+        return ResponseEntity.ok(res);
+    }
+
+    // --- POST /api/v1/banking/security/settings/limit-request ---
+    @PostMapping("/security/settings/limit-request")
+    public ResponseEntity<Map<String, Object>> requestLimitIncrease(@RequestBody Map<String, Object> req) {
+        UUID userId = getDemoUserId();
+        User user = userRepository.findById(userId).orElseThrow();
+        String email = user.getEmail();
+        
+        Object newLimitObj = req.get("newLimit");
+        if (newLimitObj == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Yeni limit değeri gerekli."));
+        }
+        
+        BigDecimal newLimit;
+        if (newLimitObj instanceof Number) {
+            newLimit = new BigDecimal(newLimitObj.toString());
+        } else {
+            newLimit = new BigDecimal((String) newLimitObj);
+        }
+
+        // Generate OTP
+        String otpCode = String.format("%06d", new java.util.Random().nextInt(999999));
+        
+        // Save OTP and requested limit in Redis
+        if (redisTemplate != null) {
+            redisTemplate.opsForValue().set("LIMIT_OTP:" + email, otpCode, java.time.Duration.ofMinutes(3));
+            redisTemplate.opsForValue().set("LIMIT_REQ:" + email, newLimit.toString(), java.time.Duration.ofMinutes(3));
+        } else {
+            fallbackCache.put("LIMIT_OTP:" + email, otpCode);
+            fallbackCache.put("LIMIT_REQ:" + email, newLimit.toString());
+        }
+
+        emailService.sendOtpEmail(email, otpCode, "limit_increase");
+        
+        return ResponseEntity.ok(Map.of("message", "Limit artırımı için doğrulama kodu gönderildi."));
+    }
+
+    // --- POST /api/v1/banking/security/settings/limit-verify ---
+    @PostMapping("/security/settings/limit-verify")
+    public ResponseEntity<Map<String, Object>> verifyLimitIncrease(@RequestBody Map<String, Object> req) {
+        UUID userId = getDemoUserId();
+        User user = userRepository.findById(userId).orElseThrow();
+        String email = user.getEmail();
+        
+        String otp = (String) req.get("otp");
+        if (otp == null || otp.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "OTP gerekli."));
+        }
+        
+        String cachedOtp;
+        if (redisTemplate != null) {
+            cachedOtp = redisTemplate.opsForValue().get("LIMIT_OTP:" + email);
+        } else {
+            cachedOtp = fallbackCache.get("LIMIT_OTP:" + email);
+        }
+        
+        if (cachedOtp == null || !cachedOtp.equals(otp)) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Geçersiz veya süresi dolmuş OTP."));
+        }
+        
+        String requestedLimitStr;
+        if (redisTemplate != null) {
+            requestedLimitStr = redisTemplate.opsForValue().get("LIMIT_REQ:" + email);
+        } else {
+            requestedLimitStr = fallbackCache.get("LIMIT_REQ:" + email);
+        }
+        
+        if (requestedLimitStr == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Kayıtlı limit artırım talebi bulunamadı."));
+        }
+        
+        // Update the limit
+        UserSecuritySettings settings = securitySettingsRepository.findByUserId(userId).orElseThrow();
+        settings.setDailyTransferLimit(new BigDecimal(requestedLimitStr));
+        securitySettingsRepository.save(settings);
+        
+        // Clear Redis
+        if (redisTemplate != null) {
+            redisTemplate.delete("LIMIT_OTP:" + email);
+            redisTemplate.delete("LIMIT_REQ:" + email);
+        } else {
+            fallbackCache.remove("LIMIT_OTP:" + email);
+            fallbackCache.remove("LIMIT_REQ:" + email);
+        }
+        
+        return ResponseEntity.ok(Map.of("message", "Günlük işlem limitiniz başarıyla güncellendi."));
+    }
+
+    // --- GET /api/v1/banking/notifications/push ---
+    @GetMapping("/notifications/push")
+    public ResponseEntity<Map<String, Object>> getPushNotifications() {
+        UUID userId = getDemoUserId();
+        User user = userRepository.findById(userId).orElseThrow();
+        String email = user.getEmail();
+        
+        String alert = bankingService.popPendingAlert(email);
+        if (alert != null) {
+            return ResponseEntity.ok(Map.of("hasNotification", true, "message", alert));
+        }
+        
+        return ResponseEntity.ok(Map.of("hasNotification", false));
     }
 }

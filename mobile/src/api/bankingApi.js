@@ -22,6 +22,14 @@ export const toggleCardSetting = async (key, value) => {
   return await apiClient.post(`${BANKING_PREFIX}/cards/toggle-setting`, { key, value });
 };
 
+export const verifyPushChallenge = async (transactionId, email, otp) => {
+  return await apiClient.post(`${BANKING_PREFIX}/verify-push`, { transactionId, email, otp });
+};
+
+export const getPushNotifications = async () => {
+  return await apiClient.get(`${BANKING_PREFIX}/notifications/push`);
+};
+
 export const submitTransfer = async (transferData) => {
   return await apiClient.post(`${BANKING_PREFIX}/transfers`, transferData);
 };

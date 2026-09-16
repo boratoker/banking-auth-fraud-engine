@@ -11,7 +11,7 @@ import Header from './src/components/Header';
 import BottomNav from './src/components/BottomNav';
 import { colors } from './src/theme/colors';
 import { StatusBar, Platform, Vibration, ActivityIndicator } from 'react-native';
-import { getPendingPushChallenges, verifyPushApproval } from './src/api/bankingApi';
+import { getPendingPushChallenges, verifyPushApproval, getPushNotifications } from './src/api/bankingApi';
 
 // Başarısız giriş uyarı Toast bileşeni
 const FailedLoginToast = ({ info, onDismiss }) => {
@@ -148,12 +148,57 @@ const TransactionPushBanner = ({ transaction, onDismiss }) => {
   );
 };
 
+const AlertPushBanner = ({ alert, onDismiss }) => {
+  const slideAnim = useRef(new Animated.Value(-200)).current;
+
+  useEffect(() => {
+    if (alert) {
+      Vibration.vibrate([0, 250, 100, 250]);
+      Animated.spring(slideAnim, {
+        toValue: Platform.OS === 'ios' ? 40 : 20,
+        useNativeDriver: true,
+        tension: 50,
+        friction: 7,
+      }).start();
+
+      const t = setTimeout(() => dismiss(), 8000);
+      return () => clearTimeout(t);
+    }
+  }, [alert]);
+
+  const dismiss = () => {
+    Animated.timing(slideAnim, {
+      toValue: -200,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => onDismiss());
+  };
+
+  if (!alert) return null;
+
+  return (
+    <Animated.View style={[styles.inAppPushContainer, { transform: [{ translateY: slideAnim }] }]}>
+      <View style={styles.inAppPushContent}>
+        <Image source={require('./src/assets/tokerbank logo.png')} style={styles.inAppPushIcon} />
+        <View style={styles.inAppPushTextContainer}>
+          <Text style={styles.inAppPushTitle}>🚨 Sistem Bildirimi</Text>
+          <Text style={styles.inAppPushBody}>{alert}</Text>
+        </View>
+      </View>
+      <TouchableOpacity style={styles.inAppPushBtnReject} onPress={dismiss}>
+        <Text style={[styles.inAppPushBtnText, { color: '#333' }]}>KAPAT</Text>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+};
+
 export default function App() {
   const [isInitializing, setIsInitializing] = useState(true);
   const [user, setUser] = useState(null); // { email, userName }
   const [activeTab, setActiveTab] = useState('overview');
   const [failedLoginInfo, setFailedLoginInfo] = useState(null);
   const [pendingTxn, setPendingTxn] = useState(null);
+  const [pendingAlert, setPendingAlert] = useState(null);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -166,13 +211,22 @@ export default function App() {
     let pollInterval;
     if (user) {
       const checkForPending = async () => {
-        if (pendingTxn) return; // Zaten bildirim ekrandaysa poll etme
-        try {
-          const res = await getPendingPushChallenges();
-          if (res.data && res.data.length > 0) {
-            setPendingTxn(res.data[0]);
-          }
-        } catch (err) {}
+        if (!pendingTxn) {
+          try {
+            const res = await getPendingPushChallenges();
+            if (res.data && res.data.length > 0) {
+              setPendingTxn(res.data[0]);
+            }
+          } catch (err) {}
+        }
+        if (!pendingAlert) {
+          try {
+            const res = await getPushNotifications();
+            if (res.data && res.data.hasNotification) {
+              setPendingAlert(res.data.message);
+            }
+          } catch (err) {}
+        }
       };
       
       checkForPending();
@@ -246,6 +300,12 @@ export default function App() {
         <TransactionPushBanner 
           transaction={pendingTxn} 
           onDismiss={() => setPendingTxn(null)} 
+        />
+        
+        {/* Sistem Uyarı / Transfer Bildirim Banner */}
+        <AlertPushBanner 
+          alert={pendingAlert} 
+          onDismiss={() => setPendingAlert(null)} 
         />
       </SafeAreaView>
     </SafeAreaProvider>

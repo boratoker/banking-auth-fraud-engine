@@ -50,6 +50,22 @@ export const terminateSession = async (id) => {
   return await axios.post(`${API_BASE_URL}/security/terminate-session`, { id });
 };
 
+export const getSecuritySettings = async () => {
+  return await axios.get(`${API_BASE_URL}/security/settings`);
+};
+
+export const updateSecuritySettings = async (updates) => {
+  return await axios.put(`${API_BASE_URL}/security/settings`, updates);
+};
+
+export const requestLimitIncrease = async (newLimit) => {
+  return await axios.post(`${API_BASE_URL}/security/settings/limit-request`, { newLimit });
+};
+
+export const verifyLimitIncrease = async (otp) => {
+  return await axios.post(`${API_BASE_URL}/security/settings/limit-verify`, { otp });
+};
+
 export const getTransactions = async () => {
   return await axios.get(`${API_BASE_URL}/transactions`);
 };

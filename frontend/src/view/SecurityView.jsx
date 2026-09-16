@@ -1,14 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { getSecuritySessions, terminateSession, getOverviewData } from '../api/bankingApi';
+import { getSecuritySessions, terminateSession, getOverviewData, getSecuritySettings, updateSecuritySettings, requestLimitIncrease, verifyLimitIncrease } from '../api/bankingApi';
 
 const SecurityView = () => {
-  const [twoFactorEnabled, setTwoFactorEnabled] = useState(true);
   const [biometricsEnabled, setBiometricsEnabled] = useState(true);
   const [fraudAlertsEnabled, setFraudAlertsEnabled] = useState(true);
   const [dailyLimit, setDailyLimit] = useState(50000);
   const [activeSessions, setActiveSessions] = useState([]);
   const [overview, setOverview] = useState(null);
   const [loading, setLoading] = useState(true);
+  
+  const [newLimitInput, setNewLimitInput] = useState('');
+  const [showLimitOtpModal, setShowLimitOtpModal] = useState(false);
+  const [limitOtp, setLimitOtp] = useState('');
+  const [limitStatusMsg, setLimitStatusMsg] = useState('');
+  const [limitError, setLimitError] = useState('');
 
   useEffect(() => {
     Promise.all([
@@ -17,9 +22,70 @@ const SecurityView = () => {
       }).catch(() => {}),
       getOverviewData().then(res => {
         if (res.data) setOverview(res.data);
+      }).catch(() => {}),
+      getSecuritySettings().then(res => {
+        if (res.data) {
+          setBiometricsEnabled(res.data.biometricsEnabled);
+          setFraudAlertsEnabled(res.data.fraudAlertsEnabled);
+          setDailyLimit(res.data.dailyTransferLimit);
+        }
       }).catch(() => {})
     ]).finally(() => setLoading(false));
   }, []);
+
+  const handleToggle = async (key, value) => {
+    try {
+      if (key === 'biometricsEnabled') setBiometricsEnabled(value);
+      if (key === 'fraudAlertsEnabled') setFraudAlertsEnabled(value);
+      
+      await updateSecuritySettings({ [key]: value });
+    } catch (e) {
+      console.error("Failed to update security settings", e);
+    }
+  };
+
+  const handleRequestLimitIncrease = async () => {
+    setLimitError('');
+    setLimitStatusMsg('');
+    const val = Number(newLimitInput);
+    if (!val || val <= 0) {
+      setLimitError("Lütfen geçerli bir limit giriniz.");
+      return;
+    }
+    if (val === dailyLimit) {
+      setLimitError("Yeni limit mevcut limit ile aynı olamaz.");
+      return;
+    }
+    try {
+      if (val < dailyLimit) {
+        // Decrease limit directly without OTP
+        await updateSecuritySettings({ dailyTransferLimit: val });
+        setDailyLimit(val);
+        setNewLimitInput('');
+        setLimitStatusMsg("Limit başarıyla düşürüldü.");
+      } else {
+        // Increase limit needs OTP
+        await requestLimitIncrease(val);
+        setShowLimitOtpModal(true);
+      }
+    } catch (e) {
+      setLimitError("İşlem başarısız oldu.");
+    }
+  };
+
+  const handleVerifyLimitIncrease = async () => {
+    setLimitError('');
+    try {
+      await verifyLimitIncrease(limitOtp);
+      setDailyLimit(Number(newLimitInput));
+      setShowLimitOtpModal(false);
+      setLimitOtp('');
+      setNewLimitInput('');
+      setLimitStatusMsg("Limit başarıyla artırıldı!");
+    } catch (e) {
+      setLimitError("Hatalı kod veya işlem başarısız.");
+    }
+  };
 
   const handleTerminateSession = async (id) => {
     setActiveSessions(prev => prev.filter(s => s.id !== id));
@@ -89,21 +155,6 @@ const SecurityView = () => {
 
           <div className="control-row">
             <div className="control-info">
-              <span className="control-title">İki Faktörlü Doğrulama (2FA / OTP)</span>
-              <span className="control-desc">Her girişte e-posta veya SMS ile 6 haneli kod istenir.</span>
-            </div>
-            <label className="switch">
-              <input 
-                type="checkbox" 
-                checked={twoFactorEnabled} 
-                onChange={(e) => setTwoFactorEnabled(e.target.checked)} 
-              />
-              <span className="slider round"></span>
-            </label>
-          </div>
-
-          <div className="control-row">
-            <div className="control-info">
               <span className="control-title">Biyometrik / Passkey Girişi</span>
               <span className="control-desc">TouchID / FaceID ile şifresiz güvenli oturum açma.</span>
             </div>
@@ -111,7 +162,7 @@ const SecurityView = () => {
               <input 
                 type="checkbox" 
                 checked={biometricsEnabled} 
-                onChange={(e) => setBiometricsEnabled(e.target.checked)} 
+                onChange={(e) => handleToggle('biometricsEnabled', e.target.checked)} 
               />
               <span className="slider round"></span>
             </label>
@@ -126,7 +177,7 @@ const SecurityView = () => {
               <input 
                 type="checkbox" 
                 checked={fraudAlertsEnabled} 
-                onChange={(e) => setFraudAlertsEnabled(e.target.checked)} 
+                onChange={(e) => handleToggle('fraudAlertsEnabled', e.target.checked)} 
               />
               <span className="slider round"></span>
             </label>
@@ -134,18 +185,25 @@ const SecurityView = () => {
 
           <div className="form-group" style={{ marginTop: '20px' }}>
             <label className="form-label">Günlük Maksimum Transfer Limiti (TL)</label>
-            <input 
-              type="range" 
-              min="5000" 
-              max="200000" 
-              step="5000"
-              value={dailyLimit}
-              onChange={(e) => setDailyLimit(Number(e.target.value))}
-              style={{ width: '100%' }}
-            />
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px', fontSize: '14px', fontWeight: 'bold' }}>
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'stretch', marginTop: '8px' }}>
+              <input 
+                type="number" 
+                className="form-input"
+                placeholder={`Mevcut: ₺${dailyLimit.toLocaleString('tr-TR')}`}
+                value={newLimitInput}
+                onChange={(e) => setNewLimitInput(e.target.value)}
+                style={{ flex: 1.6, margin: 0 }}
+              />
+              <button className="btn btn-primary" onClick={handleRequestLimitIncrease} style={{ flex: 1, whiteSpace: 'nowrap', display: 'flex', justifyContent: 'center' }}>
+                Güncelle
+              </button>
+            </div>
+            
+            {limitStatusMsg && <div className="alert-message success" style={{ marginTop: '10px', padding: '10px' }}>{limitStatusMsg}</div>}
+            {limitError && <div className="alert-message error" style={{ marginTop: '10px', padding: '10px' }}>{limitError}</div>}
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px', fontSize: '14px', fontWeight: 'bold' }}>
               <span>Mevcut Limit: ₺{dailyLimit.toLocaleString('tr-TR')}</span>
-              <span>Maks: ₺200,000</span>
             </div>
           </div>
         </div>
@@ -193,6 +251,37 @@ const SecurityView = () => {
           </div>
         </div>
       </div>
+
+      {/* OTP Modal for Limit Increase */}
+      {showLimitOtpModal && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '400px' }}>
+            <h3 style={{ marginBottom: '10px', color: '#0f172a' }}>Limit Artırımı İçin Onay</h3>
+            <p style={{ marginBottom: '20px', color: '#64748b', fontSize: '14px' }}>
+              Güvenliğiniz için limit artırım taleplerinde doğrulama gereklidir. Lütfen e-postanıza gönderilen onay kodunu giriniz.
+            </p>
+            
+            {limitError && <div className="alert-message error" style={{ padding: '8px', marginBottom: '10px' }}>{limitError}</div>}
+
+            <div className="form-group">
+              <label className="form-label">6 HANELİ ONAY KODU</label>
+              <input 
+                type="text" 
+                className="form-input" 
+                placeholder="••••••"
+                maxLength="6"
+                value={limitOtp}
+                onChange={(e) => setLimitOtp(e.target.value)}
+              />
+            </div>
+            
+            <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+              <button className="btn btn-success" onClick={handleVerifyLimitIncrease} disabled={limitOtp.length !== 6}>Onayla</button>
+              <button className="btn btn-outline" onClick={() => { setShowLimitOtpModal(false); setLimitOtp(''); }}>İptal</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -11,6 +11,7 @@ import com.banking.auth.repository.TransactionRepository;
 import com.banking.auth.repository.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,6 +35,11 @@ public class BankingService {
     private final BankingEventProducer eventProducer;
     private final MlFraudInferenceEngine fraudEngine;
     private final EmailService emailService;
+    
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private StringRedisTemplate redisTemplate;
+
+    private final java.util.Map<String, String> alertFallbackMap = new java.util.concurrent.ConcurrentHashMap<>();
 
     public BankingService(AccountRepository accountRepository,
                           TransactionRepository transactionRepository,
@@ -232,5 +238,31 @@ public class BankingService {
         
         eventProducer.publishTransferCompleted(txn.getReferenceId(), amountToSubtract);
         log.info("💸 Transfer tamamlandı. Txn: {}, Tutar: {}", txn.getReferenceId(), amountToSubtract);
+
+        // Yüksek veya Kritik Riskliyse E-posta ve Mobil Push Bildirimi Gönder
+        if ("HIGH".equals(txn.getRiskLevel()) || "CRITICAL".equals(txn.getRiskLevel())) {
+            // E-posta Bildirimi
+            emailService.sendFraudAlertEmail(txn.getUser().getEmail(), txn);
+            
+            // Mobil Push Bildirimi (Redis üzerinden simüle ediliyor, mobile app poll edecek)
+            String alertMessage = String.format("DİKKAT: Hesabınızdan %s %s tutarında riskli bir transfer gerçekleşti.", 
+                                                amountToSubtract.toString(), txn.getCurrency());
+            if (redisTemplate != null) {
+                redisTemplate.opsForValue().set("PENDING_ALERT:" + txn.getUser().getEmail(), alertMessage, java.time.Duration.ofMinutes(5));
+            } else {
+                alertFallbackMap.put("PENDING_ALERT:" + txn.getUser().getEmail(), alertMessage);
+            }
+        }
+    }
+    
+    public String popPendingAlert(String email) {
+        String key = "PENDING_ALERT:" + email;
+        if (redisTemplate != null) {
+            String alert = redisTemplate.opsForValue().get(key);
+            if (alert != null) redisTemplate.delete(key);
+            return alert;
+        } else {
+            return alertFallbackMap.remove(key);
+        }
     }
 }
