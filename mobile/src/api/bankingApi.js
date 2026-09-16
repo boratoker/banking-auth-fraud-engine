@@ -30,6 +30,14 @@ export const verifyTransferOtp = async (otpData) => {
   return await apiClient.post(`${BANKING_PREFIX}/transfers/verify-otp`, otpData);
 };
 
+export const getPendingPushChallenges = async () => {
+  return await apiClient.get(`${BANKING_PREFIX}/transfers/pending-push`);
+};
+
+export const verifyPushApproval = async (data) => {
+  return await apiClient.post(`${BANKING_PREFIX}/transfers/verify-push`, data);
+};
+
 export const getSecuritySessions = async () => {
   return await apiClient.get(`${BANKING_PREFIX}/security/sessions`);
 };

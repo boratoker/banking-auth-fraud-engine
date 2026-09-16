@@ -47,10 +47,37 @@ public class BankingController {
     }
 
     // Demo için yardımcı metod (Authentication kapalı olduğu için)
+    // Güncelleme: Artık X-User-Email header'ından aktif kullanıcıyı okur.
     private UUID getDemoUserId() {
-        return userRepository.findByEmail("toker2003@gmail.com")
-                .map(User::getId)
-                .orElseThrow(() -> new RuntimeException("Demo kullanıcısı veritabanında bulunamadı. Lütfen SQL betiğinin (data.sql) çalıştığından emin olun."));
+        org.springframework.web.context.request.ServletRequestAttributes attrs = 
+            (org.springframework.web.context.request.ServletRequestAttributes) org.springframework.web.context.request.RequestContextHolder.getRequestAttributes();
+        String email = "toker2003@gmail.com";
+        if (attrs != null) {
+            String headerEmail = attrs.getRequest().getHeader("X-User-Email");
+            if (headerEmail != null && !headerEmail.isBlank()) {
+                email = headerEmail;
+            }
+        }
+        
+        final String targetEmail = email;
+        User user = userRepository.findByEmail(targetEmail)
+                .orElseThrow(() -> new RuntimeException("Kullanıcı bulunamadı: " + targetEmail));
+                
+        // Eğer yeni kullanıcıysa ve hesabı yoksa, varsayılan bir vadesiz hesap oluştur
+        if (accountRepository.findByUserId(user.getId()).isEmpty()) {
+            Account defaultAccount = new Account();
+            defaultAccount.setUser(user);
+            defaultAccount.setAccountNumber("1000-" + (10000000 + new java.util.Random().nextInt(90000000)));
+            defaultAccount.setIban("TR" + (10 + new java.util.Random().nextInt(90)) + "000610000000" + defaultAccount.getAccountNumber().replace("-", ""));
+            defaultAccount.setName("Ana Vadesiz TL Hesabı");
+            defaultAccount.setAccountType("DEMAND");
+            defaultAccount.setCurrency("TRY");
+            defaultAccount.setBalance(java.math.BigDecimal.ZERO);
+            defaultAccount.setStatus("ACTIVE");
+            accountRepository.save(defaultAccount);
+        }
+        
+        return user.getId();
     }
 
     // --- GET /api/v1/banking/contacts ---
@@ -240,13 +267,17 @@ public class BankingController {
                 getDemoUserId(), sourceAccount.getId(), recipientIban, amount, description, deviceFingerprint, ipAddress
             );
 
-            // Eğer OTP gerektiriyorsa (RiskLevel: HIGH)
-            if ("OTP_CHALLENGED".equals(txn.getStatus())) {
+            String status = txn.getStatus();
+
+            // Push Onayı Gerekiyor (Medium/High Risk)
+            if ("PUSH_CHALLENGED".equals(status)) {
                 return ResponseEntity.ok(Map.of(
+                    "status", "PUSH_CHALLENGED",
                     "riskLevel", txn.getRiskLevel(),
                     "riskScore", txn.getRiskScore(),
-                    "requiresOtp", true,
-                    "reason", "AI Fraud Shield, bu işlemi riskli bularak ek doğrulama istedi.",
+                    "requiresPush", true,
+                    "requiresOtp", false,
+                    "reason", "AI Fraud Shield, bu işlemi riskli bularak mobil cihaz onayı istedi.",
                     "amount", amount,
                     "recipient", recipientName,
                     "iban", recipientIban,
@@ -254,10 +285,29 @@ public class BankingController {
                 ));
             }
 
+            // Critical Push Onayı Gerekiyor (Critical Risk - 2 Aşamalı)
+            if ("CRITICAL_PUSH_CHALLENGED".equals(status)) {
+                Map<String, Object> response = new HashMap<>();
+                response.put("status", "CRITICAL_PUSH_CHALLENGED");
+                response.put("riskLevel", txn.getRiskLevel());
+                response.put("riskScore", txn.getRiskScore());
+                response.put("requiresPush", true);
+                response.put("requiresOtp", false);
+                response.put("isCritical", true);
+                response.put("reason", "AI Fraud Shield CRITICAL alarm: Mobil onay + E-posta OTP doğrulaması gerekiyor.");
+                response.put("amount", amount);
+                response.put("recipient", recipientName);
+                response.put("iban", recipientIban);
+                response.put("transactionId", txn.getId());
+                return ResponseEntity.ok(response);
+            }
+
             // Güvenli işlem (RiskLevel: LOW/SAFE)
             return ResponseEntity.ok(Map.of(
+                "status", "COMPLETED",
                 "riskLevel", txn.getRiskLevel(),
                 "riskScore", txn.getRiskScore(),
+                "requiresPush", false,
                 "requiresOtp", false,
                 "success", true,
                 "message", "₺" + String.format("%.2f", amountDouble) + " tutarındaki işleminiz AI Fraud Shield (% " + txn.getRiskScore() + " Risk) tarafından onaylandı."
@@ -274,7 +324,84 @@ public class BankingController {
         }
     }
 
+    // --- GET /api/v1/banking/transfers/pending-push ---
+    // Mobil uygulama ve web bu endpoint'i polling yaparak bekleyen Push onaylarını kontrol eder.
+    @GetMapping("/transfers/pending-push")
+    public ResponseEntity<List<Map<String, Object>>> getPendingPushChallenges() {
+        List<Transaction> pendingTxns = bankingService.getPendingPushChallenges(getDemoUserId());
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Transaction txn : pendingTxns) {
+            Map<String, Object> map = new HashMap<>();
+            map.put("transactionId", txn.getId());
+            map.put("status", txn.getStatus());
+            map.put("amount", txn.getAmount().abs());
+            map.put("recipient", txn.getRecipientName() != null ? txn.getRecipientName() : txn.getDestIban());
+            map.put("iban", txn.getDestIban());
+            map.put("riskLevel", txn.getRiskLevel());
+            map.put("riskScore", txn.getRiskScore());
+            map.put("createdAt", txn.getCreatedAt().toString());
+            result.add(map);
+        }
+        return ResponseEntity.ok(result);
+    }
+
+    // --- POST /api/v1/banking/transfers/verify-push ---
+    // Mobil cihazdan gelen Push Onayı (Kriptografik imza ile).
+    @PostMapping("/transfers/verify-push")
+    public ResponseEntity<Map<String, Object>> verifyPushApproval(@RequestBody Map<String, Object> req) {
+        String transactionIdStr = (String) req.get("transactionId");
+        // Gerçek üretim ortamında burada signing-service ile kriptografik imza doğrulanır.
+        // Demo ortamında action: "APPROVE" ile onay alınır.
+        String action = (String) req.getOrDefault("action", "APPROVE");
+
+        if (transactionIdStr == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "transactionId gereklidir."));
+        }
+
+        try {
+            UUID txId = UUID.fromString(transactionIdStr);
+
+            if ("REJECT".equalsIgnoreCase(action)) {
+                // Kullanıcı mobil cihazdan REDDETTİ
+                Transaction txn = transactionRepository.findById(txId).orElseThrow();
+                txn.setStatus("REJECTED");
+                transactionRepository.save(txn);
+                log.info("📱❌ Mobil cihazdan işlem reddedildi. Txn: {}", txn.getReferenceId());
+                return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "status", "REJECTED",
+                    "message", "İşlem mobil cihazınızdan reddedildi."
+                ));
+            }
+
+            // APPROVE: Push onayını işle
+            Transaction txn = bankingService.completePushChallenge(txId, getDemoUserId());
+
+            if ("OTP_CHALLENGED".equals(txn.getStatus())) {
+                // Critical flow: Push onaylandı, şimdi OTP bekleniyor
+                return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "status", "OTP_CHALLENGED",
+                    "message", "Mobil onay alındı. Kritik risk seviyesi nedeniyle e-posta adresinize gönderilen OTP kodunu giriniz.",
+                    "requiresOtp", true,
+                    "transactionId", txn.getId()
+                ));
+            }
+
+            // Medium/High flow: İşlem tamamlandı
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "status", "COMPLETED",
+                "message", "📱 Mobil cihaz onayı doğrulandı! İşleminiz güvenle alıcıya iletildi."
+            ));
+
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     // --- POST /api/v1/banking/transfers/verify-otp ---
+    // Critical akışının 2. aşaması: E-posta OTP doğrulama
     @PostMapping("/transfers/verify-otp")
     public ResponseEntity<Map<String, Object>> verifyTransferOtp(@RequestBody Map<String, Object> req) {
         String otp = (String) req.getOrDefault("otp", "");
@@ -287,13 +414,31 @@ public class BankingController {
                 
                 return ResponseEntity.ok(Map.of(
                     "success", true,
+                    "status", "COMPLETED",
                     "message", "Güvenlik OTP kodu doğrulandı! İşleminiz güvenle alıcıya iletildi."
                 ));
             } catch (Exception e) {
                  return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
             }
         }
-        return ResponseEntity.badRequest().body(Map.of("error", "Geçersiz OTP kodu. Lütfen 123456 kodunu deneyin."));
+        return ResponseEntity.badRequest().body(Map.of("error", "Geçersiz OTP kodu."));
+    }
+
+    // --- GET /api/v1/banking/transfers/status/{transactionId} ---
+    // Web frontend polling ile işlem durumunu kontrol eder.
+    @GetMapping("/transfers/status/{transactionId}")
+    public ResponseEntity<Map<String, Object>> getTransferStatus(@PathVariable String transactionId) {
+        try {
+            UUID txId = UUID.fromString(transactionId);
+            Transaction txn = transactionRepository.findById(txId).orElseThrow();
+            return ResponseEntity.ok(Map.of(
+                "transactionId", txn.getId(),
+                "status", txn.getStatus(),
+                "riskLevel", txn.getRiskLevel() != null ? txn.getRiskLevel() : "UNKNOWN"
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", "İşlem bulunamadı."));
+        }
     }
 
     // --- GET /api/v1/banking/security/sessions ---

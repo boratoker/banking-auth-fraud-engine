@@ -132,14 +132,17 @@ public class BankingService {
             throw new SecurityException("İşlem güvenlik politikası gereği engellendi. Neden: " + evaluation.getReason());
         } 
         
-        if ("CHALLENGE_OTP".equals(decision)) {
-            txn.setStatus("OTP_CHALLENGED");
+        if ("PUSH_CHALLENGED".equals(decision)) {
+            txn.setStatus("PUSH_CHALLENGED");
             transactionRepository.save(txn);
-            
-            // 2FA OTP Üret ve Gönder (Architecture diagram flow)
-            String otpCode = "123456"; // Demo environment test code
-            emailService.sendOtpEmail(user.getEmail(), otpCode, "transfer");
-            
+            log.info("📱 Push Onay bekliyor. Txn: {}, Risk: {}", txn.getReferenceId(), evaluation.getRiskLevel());
+            return txn; 
+        }
+
+        if ("CRITICAL_PUSH_CHALLENGED".equals(decision)) {
+            txn.setStatus("CRITICAL_PUSH_CHALLENGED");
+            transactionRepository.save(txn);
+            log.info("🔴 Critical Push Onay bekliyor (2 aşamalı). Txn: {}, Risk: {}", txn.getReferenceId(), evaluation.getRiskLevel());
             return txn; 
         }
 
@@ -149,7 +152,46 @@ public class BankingService {
     }
 
     /**
-     * OTP doğrulandıktan sonra işlemi tamamlar.
+     * Push onayı (Mobil Cihaz İmzası) doğrulandıktan sonra:
+     * - PUSH_CHALLENGED → İşlemi doğrudan COMPLETED yapar.
+     * - CRITICAL_PUSH_CHALLENGED → İşlemi OTP_CHALLENGED'a çeker (2. aşama: E-posta OTP).
+     */
+    @Transactional
+    public Transaction completePushChallenge(UUID transactionId, UUID userId) {
+        Transaction txn = transactionRepository.findById(transactionId)
+            .orElseThrow(() -> new IllegalArgumentException("İşlem bulunamadı."));
+
+        if (!txn.getUser().getId().equals(userId)) {
+             throw new SecurityException("İşlem yetkisi yok.");
+        }
+
+        String status = txn.getStatus();
+
+        if ("PUSH_CHALLENGED".equals(status)) {
+            // Medium/High risk: Push onayı yeterli, direkt tamamla
+            Account sourceAccount = accountRepository.findByIdForUpdate(txn.getSourceAccount().getId())
+                .orElseThrow(() -> new IllegalArgumentException("Kaynak hesap bulunamadı."));
+            executeTransfer(txn, sourceAccount, txn.getAmount().abs());
+            log.info("📱✅ Push onayı ile transfer tamamlandı. Txn: {}", txn.getReferenceId());
+            return txn;
+        }
+
+        if ("CRITICAL_PUSH_CHALLENGED".equals(status)) {
+            // Critical risk: Push onayı alındı, şimdi E-posta OTP gönder (2. aşama)
+            txn.setStatus("OTP_CHALLENGED");
+            transactionRepository.save(txn);
+            
+            String otpCode = String.format("%06d", new java.util.Random().nextInt(999999));
+            emailService.sendOtpEmail(txn.getUser().getEmail(), otpCode, "transfer");
+            log.info("🔴➡️ Critical Push onaylandı, OTP gönderildi. Txn: {}", txn.getReferenceId());
+            return txn;
+        }
+
+        throw new IllegalStateException("Bu işlem Push onay bekleyen durumda değil. Mevcut durum: " + status);
+    }
+
+    /**
+     * OTP doğrulandıktan sonra işlemi tamamlar (Critical akışının 2. aşaması).
      */
     @Transactional
     public Transaction completeChallengedTransfer(UUID transactionId, UUID userId) {
@@ -169,6 +211,15 @@ public class BankingService {
 
         executeTransfer(txn, sourceAccount, txn.getAmount().abs());
         return txn;
+    }
+
+    /**
+     * Belirli bir kullanıcının Push onayı bekleyen işlemlerini getirir.
+     */
+    public List<Transaction> getPendingPushChallenges(UUID userId) {
+        return transactionRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
+            .filter(t -> "PUSH_CHALLENGED".equals(t.getStatus()) || "CRITICAL_PUSH_CHALLENGED".equals(t.getStatus()))
+            .toList();
     }
     
     private void executeTransfer(Transaction txn, Account sourceAccount, BigDecimal amountToSubtract) {

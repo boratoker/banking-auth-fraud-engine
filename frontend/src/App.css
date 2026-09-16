@@ -2159,3 +2159,197 @@ input:checked+.slider:before {
     border-color: rgba(248, 113, 113, 0.4);
   }
 }
+
+/* ==========================================================================
+   Push Notification Waiting Screen
+   ========================================================================== */
+.push-waiting-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 70vh;
+  padding: 20px;
+}
+
+.push-waiting-card {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 24px;
+  padding: 48px 40px;
+  max-width: 480px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.push-phone-animation {
+  margin-bottom: 32px;
+  display: flex;
+  justify-content: center;
+}
+
+.phone-icon-wrapper {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.phone-icon {
+  font-size: 48px;
+  animation: phoneShake 1.5s ease-in-out infinite;
+  z-index: 2;
+  position: relative;
+}
+
+.phone-pulse {
+  position: absolute;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  border: 2px solid rgba(59, 130, 246, 0.5);
+  animation: phonePulse 2s ease-out infinite;
+}
+
+.phone-pulse.delay {
+  animation-delay: 0.6s;
+}
+
+@keyframes phoneShake {
+  0%, 100% { transform: rotate(0deg); }
+  10% { transform: rotate(-8deg); }
+  20% { transform: rotate(8deg); }
+  30% { transform: rotate(-6deg); }
+  40% { transform: rotate(6deg); }
+  50% { transform: rotate(0deg); }
+}
+
+@keyframes phonePulse {
+  0% {
+    transform: scale(0.8);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+.push-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #e2e8f0;
+  margin-bottom: 8px;
+}
+
+.push-subtitle {
+  font-size: 0.9rem;
+  color: #94a3b8;
+  line-height: 1.6;
+  margin-bottom: 28px;
+}
+
+.push-transfer-details {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+}
+
+.push-detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.push-detail-row:last-child {
+  border-bottom: none;
+}
+
+.push-detail-label {
+  font-size: 0.82rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.push-detail-value {
+  font-size: 0.88rem;
+  color: #e2e8f0;
+  font-weight: 600;
+  text-align: right;
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.push-amount {
+  font-size: 1.1rem;
+  color: #60a5fa;
+}
+
+.push-critical-badge {
+  background: rgba(220, 38, 38, 0.15);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  border-radius: 12px;
+  padding: 12px 16px;
+  color: #fca5a5;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 24px;
+  animation: criticalGlow 2s ease-in-out infinite;
+}
+
+@keyframes criticalGlow {
+  0%, 100% { box-shadow: 0 0 8px rgba(220, 38, 38, 0.2); }
+  50% { box-shadow: 0 0 20px rgba(220, 38, 38, 0.4); }
+}
+
+.push-loading-dots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin: 24px 0;
+}
+
+.push-loading-dots span {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #3b82f6;
+  animation: dotBounce 1.4s ease-in-out infinite;
+}
+
+.push-loading-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.push-loading-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes dotBounce {
+  0%, 80%, 100% {
+    transform: scale(0.6);
+    opacity: 0.4;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.push-cancel-btn {
+  margin-top: 8px;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.push-cancel-btn:hover {
+  opacity: 1;
+}

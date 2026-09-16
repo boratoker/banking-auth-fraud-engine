@@ -352,8 +352,9 @@ public class MlFraudInferenceEngine {
     }
 
     private String determineDecision(double riskScore, BigDecimal amount) {
-        if (riskScore > 80) return "REJECTED";
-        if (riskScore > 55 || amount.compareTo(BigDecimal.valueOf(50000)) >= 0) return "OTP_CHALLENGED";
+        if (riskScore > 84) return "CRITICAL_PUSH_CHALLENGED";
+        if (riskScore > 55 || amount.compareTo(BigDecimal.valueOf(50000)) >= 0) return "PUSH_CHALLENGED";
+        if (riskScore > 30) return "PUSH_CHALLENGED";
         return "COMPLETED";
     }
 

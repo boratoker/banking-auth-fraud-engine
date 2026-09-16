@@ -10,7 +10,8 @@ import SecurityScreen from './src/screens/SecurityScreen';
 import Header from './src/components/Header';
 import BottomNav from './src/components/BottomNav';
 import { colors } from './src/theme/colors';
-import { StatusBar } from 'react-native';
+import { StatusBar, Platform, Vibration, ActivityIndicator } from 'react-native';
+import { getPendingPushChallenges, verifyPushApproval } from './src/api/bankingApi';
 
 // Başarısız giriş uyarı Toast bileşeni
 const FailedLoginToast = ({ info, onDismiss }) => {
@@ -70,11 +71,89 @@ const FailedLoginToast = ({ info, onDismiss }) => {
   );
 };
 
+// İşlem Onayı Banner Bileşeni
+const TransactionPushBanner = ({ transaction, onDismiss }) => {
+  const slideAnim = useRef(new Animated.Value(-200)).current;
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (transaction) {
+      Vibration.vibrate([0, 250, 100, 250]);
+      Animated.spring(slideAnim, {
+        toValue: Platform.OS === 'ios' ? 40 : 20,
+        useNativeDriver: true,
+        tension: 50,
+        friction: 7,
+      }).start();
+    }
+  }, [transaction]);
+
+  const dismiss = (callback) => {
+    Animated.timing(slideAnim, {
+      toValue: -200,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => {
+      onDismiss();
+      if (callback) callback();
+    });
+  };
+
+  const handleAction = async (action) => {
+    if (loading) return;
+    setLoading(true);
+    try {
+      await verifyPushApproval({
+        transactionId: transaction.transactionId,
+        action: action,
+      });
+      if (action === 'REJECT') {
+        Vibration.vibrate([0, 100, 100, 100]);
+      } else {
+        Vibration.vibrate(200);
+      }
+      dismiss();
+    } catch (err) {
+      console.log('Action error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!transaction) return null;
+
+  return (
+    <Animated.View style={[styles.inAppPushContainer, { transform: [{ translateY: slideAnim }] }]}>
+      <View style={styles.inAppPushContent}>
+        <Image source={require('./src/assets/tokerbank logo.png')} style={styles.inAppPushIcon} />
+        <View style={styles.inAppPushTextContainer}>
+          <Text style={styles.inAppPushTitle}>
+            {transaction.status === 'CRITICAL_PUSH_CHALLENGED' ? '🔴 Kritik İşlem Onayı' : 'İşlem Onayı'}
+          </Text>
+          <Text style={styles.inAppPushBody}>
+            {transaction.recipient} kişisine ₺{Number(transaction.amount).toLocaleString('tr-TR')} transfer edilecek.
+          </Text>
+        </View>
+      </View>
+      
+      <View style={styles.inAppPushActions}>
+        <TouchableOpacity style={styles.inAppPushBtnApprove} onPress={() => handleAction('APPROVE')}>
+          {loading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.inAppPushBtnText}>ONAYLA</Text>}
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.inAppPushBtnReject} onPress={() => handleAction('REJECT')}>
+          <Text style={[styles.inAppPushBtnText, { color: '#f87171' }]}>REDDET</Text>
+        </TouchableOpacity>
+      </View>
+    </Animated.View>
+  );
+};
+
 export default function App() {
   const [isInitializing, setIsInitializing] = useState(true);
   const [user, setUser] = useState(null); // { email, userName }
   const [activeTab, setActiveTab] = useState('overview');
   const [failedLoginInfo, setFailedLoginInfo] = useState(null);
+  const [pendingTxn, setPendingTxn] = useState(null);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -83,16 +162,40 @@ export default function App() {
     return () => clearTimeout(timer);
   }, []);
 
+  useEffect(() => {
+    let pollInterval;
+    if (user) {
+      const checkForPending = async () => {
+        if (pendingTxn) return; // Zaten bildirim ekrandaysa poll etme
+        try {
+          const res = await getPendingPushChallenges();
+          if (res.data && res.data.length > 0) {
+            setPendingTxn(res.data[0]);
+          }
+        } catch (err) {}
+      };
+      
+      checkForPending();
+      pollInterval = setInterval(checkForPending, 3000);
+    }
+    return () => {
+      if (pollInterval) clearInterval(pollInterval);
+    };
+  }, [user, pendingTxn]);
+
   const handleLogout = () => {
     setUser(null);
     setActiveTab('overview');
     setFailedLoginInfo(null);
+    import('./src/api/config').then(m => m.setAuthEmail(null));
   };
 
   const handleAuthSuccess = ({ email, userName, failedLoginInfo: fli }) => {
     setUser({ email, userName });
     if (fli) setFailedLoginInfo(fli);
+    import('./src/api/config').then(m => m.setAuthEmail(email));
   };
+
 
   if (isInitializing) {
     return (
@@ -137,6 +240,12 @@ export default function App() {
         <FailedLoginToast
           info={failedLoginInfo}
           onDismiss={() => setFailedLoginInfo(null)}
+        />
+        
+        {/* İşlem Onayı Banner */}
+        <TransactionPushBanner 
+          transaction={pendingTxn} 
+          onDismiss={() => setPendingTxn(null)} 
         />
       </SafeAreaView>
     </SafeAreaProvider>
@@ -191,5 +300,73 @@ const styles = StyleSheet.create({
   },
   toastClose: {
     padding: 4,
+  },
+  inAppPushContainer: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 16,
+    zIndex: 10000,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)',
+  },
+  inAppPushContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  inAppPushIcon: {
+    width: 36,
+    height: 36,
+    resizeMode: 'contain',
+    marginRight: 12,
+  },
+  inAppPushTextContainer: {
+    flex: 1,
+  },
+  inAppPushTitle: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#333333',
+    marginBottom: 4,
+  },
+  inAppPushBody: {
+    fontSize: 13,
+    color: '#666666',
+    lineHeight: 18,
+  },
+  inAppPushActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  inAppPushBtnApprove: {
+    flex: 1,
+    backgroundColor: '#16a34a',
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inAppPushBtnReject: {
+    flex: 1,
+    backgroundColor: 'rgba(248,113,113,0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(248,113,113,0.3)',
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inAppPushBtnText: {
+    fontSize: 14,
+    color: '#fff',
+    fontWeight: '700',
   },
 });

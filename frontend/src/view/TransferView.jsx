@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { submitTransfer, verifyTransferOtp, getContacts } from '../api/bankingApi';
+import React, { useState, useEffect, useRef } from 'react';
+import { submitTransfer, verifyTransferOtp, getContacts, getTransferStatus } from '../api/bankingApi';
 import tokerbankLogo from '../assets/tokerbank-logo.png';
 import { RiskBadge } from '../utils/riskUtils';
 
@@ -19,10 +19,59 @@ const TransferView = ({ initialRecipient = '', initialIban = '' }) => {
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Fraud Modal State
-  const [showFraudModal, setShowFraudModal] = useState(false);
-  const [fraudModalData, setFraudModalData] = useState(null);
+  // Push Challenge State
+  const [pushWaiting, setPushWaiting] = useState(false);
+  const [pushData, setPushData] = useState(null);
+  const pollRef = useRef(null);
+
+  // Fraud Modal State (Critical 2nd step: OTP)
+  const [showOtpModal, setShowOtpModal] = useState(false);
+  const [otpModalData, setOtpModalData] = useState(null);
   const [modalOtpInput, setModalOtpInput] = useState('');
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, []);
+
+  // Start polling for transaction status after push challenge
+  const startPolling = (transactionId, isCritical) => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await getTransferStatus(transactionId);
+        const status = res.data.status;
+
+        if (status === 'COMPLETED') {
+          clearInterval(pollRef.current);
+          pollRef.current = null;
+          setPushWaiting(false);
+          setPushData(null);
+          setSuccessMsg('📱 Mobil cihaz onayı doğrulandı! İşleminiz güvenle alıcıya iletildi.');
+          clearForm();
+        } else if (status === 'REJECTED') {
+          clearInterval(pollRef.current);
+          pollRef.current = null;
+          setPushWaiting(false);
+          setPushData(null);
+          setErrorMsg('📱 İşlem mobil cihazınızdan reddedildi.');
+        } else if (status === 'OTP_CHALLENGED' && isCritical) {
+          // Critical flow: Push approved, now need OTP
+          clearInterval(pollRef.current);
+          pollRef.current = null;
+          setPushWaiting(false);
+          setPushData(null);
+          setOtpModalData({ transactionId, riskLevel: 'CRITICAL' });
+          setShowOtpModal(true);
+        }
+      } catch (err) {
+        // Keep polling on network errors
+      }
+    }, 2000); // Poll every 2 seconds
+  };
 
   const handleTransferSubmit = async (e) => {
     e.preventDefault();
@@ -33,7 +82,6 @@ const TransferView = ({ initialRecipient = '', initialIban = '' }) => {
     const numericAmount = parseFloat(amount);
 
     try {
-      // Backend REST API Request to Banking & AI Fraud Engine
       const res = await submitTransfer({
         selectedAccount,
         recipientIban,
@@ -45,95 +93,78 @@ const TransferView = ({ initialRecipient = '', initialIban = '' }) => {
       setLoading(false);
       const data = res.data;
 
-      if (data.requiresOtp || data.riskLevel === 'HIGH') {
-        // High amount/risk triggers Fraud Engine verification modal
-        setFraudModalData({
+      if (data.requiresPush) {
+        // Push Challenge: Show waiting screen and start polling
+        const isCritical = data.status === 'CRITICAL_PUSH_CHALLENGED';
+        setPushData({
+          transactionId: data.transactionId,
           riskLevel: data.riskLevel,
-          riskScore: data.riskScore || 68,
-          reason: data.reason || 'Yüksek tutarlı transfer (₺50,000+) ve ek güvenlik kuralı.',
+          riskScore: data.riskScore,
+          reason: data.reason,
           amount: numericAmount,
           recipient: recipientName || 'Alıcı',
           iban: recipientIban,
-          transactionId: data.transactionId
+          isCritical
         });
-        setShowFraudModal(true);
+        setPushWaiting(true);
+        startPolling(data.transactionId, isCritical);
       } else {
-        // Standard normal amount approved
+        // Standard safe transfer
         setSuccessMsg(data.message || `✅ ₺${numericAmount.toLocaleString('tr-TR')} tutarındaki FAST transferiniz AI Fraud Shield tarafından onaylandı.`);
-        setAmount('');
-        setRecipientIban('');
-        setRecipientName('');
-        setDescription('');
+        clearForm();
       }
     } catch (err) {
       setLoading(false);
       
-      // Handle blocked transactions (CRITICAL risk)
       if (err.response && err.response.status === 403) {
         setErrorMsg(err.response.data.error || 'İşleminiz güvenlik nedeniyle bloke edildi.');
         return;
       }
       
-      // Handle business errors (e.g., insufficient balance)
       if (err.response && err.response.status === 400) {
         setErrorMsg(err.response.data.error || 'İşlem gerçekleştirilemedi.');
         return;
       }
 
-      // Graceful fallback if backend API is not responding
-      if (numericAmount >= 50000) {
-        setFraudModalData({
-          riskLevel: 'HIGH',
-          riskScore: 68,
-          reason: 'Yüksek tutarlı transfer (₺50,000+) ve daha önce işlem yapılmamış yeni IBAN.',
-          amount: numericAmount,
-          recipient: recipientName || 'Alıcı',
-          iban: recipientIban,
-          transactionId: null // API failure fallback
-        });
-        setShowFraudModal(true);
-      } else {
-        setSuccessMsg(`✅ ₺${numericAmount.toLocaleString('tr-TR')} tutarındaki FAST transferiniz AI Fraud Shield tarafından onaylandı.`);
-        setAmount('');
-        setRecipientIban('');
-        setRecipientName('');
-        setDescription('');
-      }
+      setErrorMsg('Sunucu ile bağlantı kurulamadı. Lütfen tekrar deneyin.');
     }
   };
 
-  const handleConfirmFraudOtp = async () => {
+  const handleConfirmOtp = async () => {
     if (!modalOtpInput || modalOtpInput.trim().length !== 6) {
-      alert('Lütfen 6 haneli doğrulama kodunu giriniz (Örnek: 123456).');
+      alert('Lütfen 6 haneli doğrulama kodunu giriniz.');
       return;
     }
 
     try {
       const res = await verifyTransferOtp({
         otp: modalOtpInput,
-        transactionId: fraudModalData.transactionId
+        transactionId: otpModalData.transactionId
       });
 
-      setShowFraudModal(false);
+      setShowOtpModal(false);
       setModalOtpInput('');
-      setSuccessMsg(res.data.message || `✅ Güvenlik OTP doğrulandı! ₺${fraudModalData.amount.toLocaleString('tr-TR')} tutarındaki transferiniz güvenle alıcıya iletildi.`);
-      setAmount('');
-      setRecipientIban('');
-      setRecipientName('');
-      setDescription('');
+      setOtpModalData(null);
+      setSuccessMsg(res.data.message || '✅ Güvenlik OTP doğrulandı! İşleminiz güvenle alıcıya iletildi.');
+      clearForm();
     } catch (err) {
-      if (modalOtpInput === '123456') {
-        setShowFraudModal(false);
-        setModalOtpInput('');
-        setSuccessMsg(`✅ Güvenlik OTP doğrulandı! ₺${fraudModalData.amount.toLocaleString('tr-TR')} tutarındaki transferiniz güvenle alıcıya iletildi.`);
-        setAmount('');
-        setRecipientIban('');
-        setRecipientName('');
-        setDescription('');
-      } else {
-        alert(err.response?.data?.error || 'Geçersiz OTP Kodu. Lütfen 123456 deneyiniz.');
-      }
+      alert(err.response?.data?.error || 'Geçersiz OTP Kodu.');
     }
+  };
+
+  const handleCancelPush = () => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = null;
+    setPushWaiting(false);
+    setPushData(null);
+    setErrorMsg('İşlem iptal edildi.');
+  };
+
+  const clearForm = () => {
+    setAmount('');
+    setRecipientIban('');
+    setRecipientName('');
+    setDescription('');
   };
 
   const [savedContacts, setSavedContacts] = useState([]);
@@ -148,6 +179,69 @@ const TransferView = ({ initialRecipient = '', initialIban = '' }) => {
       .catch(err => console.error('Failed to fetch contacts', err));
   }, []);
 
+  // =================== PUSH WAITING SCREEN ===================
+  if (pushWaiting && pushData) {
+    return (
+      <div className="view-container transfer-view">
+        <div className="push-waiting-screen">
+          <div className="push-waiting-card">
+            <div className="push-phone-animation">
+              <div className="phone-icon-wrapper">
+                <span className="phone-icon">📱</span>
+                <span className="phone-pulse"></span>
+                <span className="phone-pulse delay"></span>
+              </div>
+            </div>
+            
+            <h2 className="push-title">Mobil Cihaz Onayı Bekleniyor</h2>
+            <p className="push-subtitle">
+              {pushData.isCritical 
+                ? 'Kritik risk seviyesi! Önce mobil cihazınızdan onaylayın, ardından e-posta OTP doğrulaması istenecektir.'
+                : 'Lütfen telefonunuzdaki TokerBank uygulamasından işlemi onaylayın.'
+              }
+            </p>
+
+            <div className="push-transfer-details">
+              <div className="push-detail-row">
+                <span className="push-detail-label">Alıcı</span>
+                <span className="push-detail-value">{pushData.recipient}</span>
+              </div>
+              <div className="push-detail-row">
+                <span className="push-detail-label">IBAN</span>
+                <span className="push-detail-value">{pushData.iban}</span>
+              </div>
+              <div className="push-detail-row">
+                <span className="push-detail-label">Tutar</span>
+                <span className="push-detail-value push-amount">₺{pushData.amount.toLocaleString('tr-TR')}</span>
+              </div>
+              <div className="push-detail-row">
+                <span className="push-detail-label">Risk</span>
+                <span className="push-detail-value">
+                  <RiskBadge riskLevel={pushData.riskLevel} riskScore={pushData.riskScore} />
+                </span>
+              </div>
+            </div>
+
+            {pushData.isCritical && (
+              <div className="push-critical-badge">
+                🔴 2 Aşamalı Doğrulama: Mobil Onay + E-Posta OTP
+              </div>
+            )}
+
+            <div className="push-loading-dots">
+              <span></span><span></span><span></span>
+            </div>
+
+            <button className="btn btn-secondary push-cancel-btn" onClick={handleCancelPush}>
+              İşlemi İptal Et
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // =================== MAIN TRANSFER FORM ===================
   return (
     <div className="view-container transfer-view">
       <div className="view-header">
@@ -216,7 +310,7 @@ const TransferView = ({ initialRecipient = '', initialIban = '' }) => {
                 required
               />
               <span className="field-hint">
-                💡 ₺50,000 üzerindeki transferlerde AI Fraud Engine otomatik ek doğrulama isteyebilir.
+                💡 AI Fraud Engine risk skoru yüksek bulursa mobil cihaz onayı istenecektir.
               </span>
             </div>
 
@@ -274,27 +368,18 @@ const TransferView = ({ initialRecipient = '', initialIban = '' }) => {
         </div>
       </div>
 
-      {/* Fraud Verification Modal */}
-      {showFraudModal && (
+      {/* Critical OTP Modal (2nd step after Push approval) */}
+      {showOtpModal && (
         <div className="modal-backdrop">
           <div className="modal-card fraud-alert-modal">
             <div className="modal-header warning">
-              <span className="modal-icon">⚠️</span>
-              <h3>AI Fraud Shield Güvenlik Uyarısı</h3>
+              <span className="modal-icon">🔴</span>
+              <h3>Critical: E-Posta OTP Doğrulama (2. Aşama)</h3>
             </div>
             <div className="modal-body">
-              <div style={{ marginBottom: '12px', textAlign: 'center' }}>
-                <RiskBadge riskLevel={fraudModalData.riskLevel} riskScore={fraudModalData.riskScore} />
-              </div>
               <p className="risk-reason">
-                <strong>Sebep:</strong> {fraudModalData.reason}
+                Mobil cihaz onayınız alınmıştır. Kritik risk seviyesi nedeniyle ek olarak e-posta adresinize gönderilen 6 haneli doğrulama kodunu giriniz.
               </p>
-
-              <div className="transfer-summary-box">
-                <div><strong>Alıcı:</strong> {fraudModalData.recipient}</div>
-                <div><strong>IBAN:</strong> {fraudModalData.iban}</div>
-                <div><strong>Tutar:</strong> ₺{fraudModalData.amount.toLocaleString('tr-TR')}</div>
-              </div>
 
               <div className="form-group" style={{ marginTop: '16px' }}>
                 <label className="form-label">E-posta 6-Haneli Doğrulama Kodu</label>
@@ -306,15 +391,14 @@ const TransferView = ({ initialRecipient = '', initialIban = '' }) => {
                   value={modalOtpInput}
                   onChange={(e) => setModalOtpInput(e.target.value)}
                 />
-                <span className="field-hint">Test Kodu: 123456</span>
               </div>
             </div>
             <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setShowFraudModal(false)}>
+              <button className="btn btn-secondary" onClick={() => { setShowOtpModal(false); setModalOtpInput(''); }}>
                 İşlemi İptal Et
               </button>
-              <button className="btn btn-primary" onClick={handleConfirmFraudOtp}>
-                Güvenle Onayla
+              <button className="btn btn-primary" onClick={handleConfirmOtp}>
+                OTP Doğrula & Onayla
               </button>
             </div>
           </div>

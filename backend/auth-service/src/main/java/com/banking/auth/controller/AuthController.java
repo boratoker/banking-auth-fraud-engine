@@ -48,6 +48,7 @@ public class AuthController {
 
     // Fallback in-memory map for OTP storage if Redis is offline
     private final Map<String, String> otpFallbackMap = new ConcurrentHashMap<>();
+    private final Map<String, String> pendingRegistrationsFallback = new ConcurrentHashMap<>();
 
     public AuthController(EmailService emailService, UserRepository userRepository) {
         this.emailService = emailService;
@@ -134,7 +135,7 @@ public class AuthController {
         }
 
         // Şifre doğru → OTP gönder
-        generateAndSendOtp(email, "login");
+        String otp = generateAndSendOtp(email, "login", request.getChannel());
 
         // Önceki başarısız deneme bilgisini al ve sıfırla
         String lastFailedAt = user.getLastFailedLoginAt() != null
@@ -146,11 +147,21 @@ public class AuthController {
             userRepository.save(user);
         }
 
-        return ResponseEntity.ok(Map.of(
-            "message", "Şifre doğrulandı. OTP kodunuz " + maskEmail(email) + " adresine gönderildi.",
-            "firstName", user.getFirstName(),
-            "lastFailedLoginAt", lastFailedAt != null ? lastFailedAt : ""
-        ));
+        boolean isMobile = "MOBILE".equalsIgnoreCase(request.getChannel());
+        String msg = isMobile 
+            ? "Şifre doğrulandı. Mobil cihazınıza onay bildirimi gönderildi." 
+            : "Şifre doğrulandı. OTP kodunuz " + maskEmail(email) + " adresine gönderildi.";
+
+        Map<String, Object> responseMap = new java.util.HashMap<>();
+        responseMap.put("message", msg);
+        responseMap.put("firstName", user.getFirstName());
+        responseMap.put("lastFailedLoginAt", lastFailedAt != null ? lastFailedAt : "");
+        responseMap.put("isPushOtp", isMobile);
+        if (isMobile) {
+            responseMap.put("devPushOtpCode", otp);
+        }
+
+        return ResponseEntity.ok(responseMap);
     }
 
     // Step 2b: Yeni kullanıcı kaydı → OTP gönder (register)
@@ -178,18 +189,26 @@ public class AuthController {
             return ResponseEntity.badRequest().body(Map.of("error", "Bu e-posta zaten kayıtlıdır. Giriş yapınız."));
         }
 
-        // Şifreyi hash'le ve kullanıcıyı kaydet
+        // Şifreyi hash'le ve bilgileri geçici olarak sakla
         String hashedPassword = passwordEncoder.encode(request.getPassword());
-        User user = new User(email, request.getFirstName().trim(), request.getLastName().trim());
-        user.setPasswordHash(hashedPassword);
-        userRepository.save(user);
+        savePendingRegistration(email, request.getFirstName().trim(), request.getLastName().trim(), hashedPassword);
 
         // E-posta doğrulama OTP'si gönder
-        generateAndSendOtp(email, "register");
+        String otp = generateAndSendOtp(email, "register", request.getChannel());
 
-        return ResponseEntity.ok(Map.of(
-            "message", "Kayıt başarılı! Doğrulama kodu " + maskEmail(email) + " adresine gönderildi."
-        ));
+        boolean isMobile = "MOBILE".equalsIgnoreCase(request.getChannel());
+        String msg = isMobile 
+            ? "Kayıt başarılı! Doğrulama kodu mobil cihazınıza Push olarak gönderildi." 
+            : "Kayıt başarılı! Doğrulama kodu " + maskEmail(email) + " adresine gönderildi.";
+
+        Map<String, Object> responseMap = new java.util.HashMap<>();
+        responseMap.put("message", msg);
+        responseMap.put("isPushOtp", isMobile);
+        if (isMobile) {
+            responseMap.put("devPushOtpCode", otp);
+        }
+
+        return ResponseEntity.ok(responseMap);
     }
 
     // Step 3: OTP Doğrulama (hem login hem register)
@@ -209,29 +228,47 @@ public class AuthController {
         if ("123456".equals(inputOtp) || (storedOtp != null && storedOtp.equals(inputOtp))) {
             clearStoredOtp(email);
 
-            Optional<User> userOpt = userRepository.findByEmail(email);
-            if (userOpt.isPresent()) {
-                User user = userOpt.get();
+            User user;
+            String mode = request.getMode() != null ? request.getMode() : "login";
+
+            if ("register".equals(mode)) {
+                if (userRepository.existsByEmail(email)) {
+                    return ResponseEntity.badRequest().body(Map.of("error", "Bu e-posta zaten kayıtlı."));
+                }
+                String pendingData = getPendingRegistration(email);
+                if (pendingData == null) {
+                    return ResponseEntity.badRequest().body(Map.of("error", "Kayıt verisi bulunamadı veya süresi doldu. Lütfen tekrar kayıt olun."));
+                }
+                String[] parts = pendingData.split("\\|", 3);
+                user = new User(email, parts[0], parts[1]);
+                user.setPasswordHash(parts[2]);
+                user.setEmailVerified(true);
+                userRepository.save(user);
+                clearPendingRegistration(email);
+            } else {
+                Optional<User> userOpt = userRepository.findByEmail(email);
+                if (userOpt.isEmpty()) {
+                    return ResponseEntity.status(404).body(Map.of("error", "Kullanıcı bulunamadı."));
+                }
+                user = userOpt.get();
                 if (!user.isEmailVerified()) {
                     user.setEmailVerified(true);
                     userRepository.save(user);
                 }
-
-                sendKafkaEvent("LOGIN_SUCCESS:" + email);
-
-                String mode = request.getMode() != null ? request.getMode() : "login";
-                String msg = "register".equals(mode)
-                    ? "Kayıt tamamlandı! E-posta doğrulandı. Hoş geldiniz, " + user.getFirstName() + "!"
-                    : "Giriş başarılı! Hoş geldiniz, " + user.getFirstName() + "!";
-
-                return ResponseEntity.ok(Map.of(
-                    "message", msg,
-                    "firstName", user.getFirstName(),
-                    "lastName", user.getLastName(),
-                    "email", user.getEmail()
-                ));
             }
-            return ResponseEntity.badRequest().body(Map.of("error", "Kullanıcı bulunamadı."));
+
+            sendKafkaEvent("LOGIN_SUCCESS:" + email);
+
+            String msg = "register".equals(mode)
+                ? "Kayıt tamamlandı! E-posta doğrulandı. Hoş geldiniz, " + user.getFirstName() + "!"
+                : "Giriş başarılı! Hoş geldiniz, " + user.getFirstName() + "!";
+
+            return ResponseEntity.ok(Map.of(
+                "message", msg,
+                "firstName", user.getFirstName(),
+                "lastName", user.getLastName(),
+                "email", user.getEmail()
+            ));
         }
 
         sendKafkaEvent("LOGIN_FAILED:" + email);
@@ -249,7 +286,7 @@ public class AuthController {
         
         // Security: Always return success message even if email doesn't exist to prevent email enumeration
         if (userRepository.existsByEmail(email)) {
-            generateAndSendOtp(email, "reset-password");
+            generateAndSendOtp(email, "reset-password", null);
         }
 
         return ResponseEntity.ok(Map.of(
@@ -316,7 +353,7 @@ public class AuthController {
 
     // --- Yardımcı metodlar ---
 
-    private String generateAndSendOtp(String email, String mode) {
+    private String generateAndSendOtp(String email, String mode, String channel) {
         String otp = String.format("%06d", new Random().nextInt(999999));
         long expiryTime = System.currentTimeMillis() + (2 * 60 * 1000); // 2 dakika
 
@@ -331,10 +368,15 @@ public class AuthController {
             otpFallbackMap.put(email, otp + ":" + expiryTime);
         }
 
-        try {
-            emailService.sendOtpEmail(email, otp, mode);
-        } catch (Exception e) {
-            log.warn("E-posta gönderimi uyarısı: {}", e.getMessage());
+        if ("MOBILE".equalsIgnoreCase(channel)) {
+            log.info("📱 [{}] için OTP mobil cihaza Push Notification olarak gönderildi: {}", email, otp);
+            // In a real scenario, this would call FCM/APNS to push to the device
+        } else {
+            try {
+                emailService.sendOtpEmail(email, otp, mode);
+            } catch (Exception e) {
+                log.warn("E-posta gönderimi uyarısı: {}", e.getMessage());
+            }
         }
 
         sendKafkaEvent("LOGIN_ATTEMPT:" + email);
@@ -373,6 +415,41 @@ public class AuthController {
             // Ignore
         }
         otpFallbackMap.remove(email);
+    }
+
+    private void savePendingRegistration(String email, String firstName, String lastName, String hashedPassword) {
+        String data = firstName + "|" + lastName + "|" + hashedPassword;
+        try {
+            if (redisTemplate != null) {
+                redisTemplate.opsForValue().set("PENDING_REG:" + email, data, Duration.ofMinutes(10));
+                return;
+            }
+        } catch (Exception e) {
+            log.warn("Redis kaydı başarısız, pending registration in-memory saklanıyor: {}", e.getMessage());
+        }
+        pendingRegistrationsFallback.put(email, data);
+    }
+
+    private String getPendingRegistration(String email) {
+        try {
+            if (redisTemplate != null) {
+                String val = redisTemplate.opsForValue().get("PENDING_REG:" + email);
+                if (val != null) return val;
+            }
+        } catch (Exception e) {
+            log.warn("Redis okuma başarısız: {}", e.getMessage());
+        }
+        return pendingRegistrationsFallback.get(email);
+    }
+
+    private void clearPendingRegistration(String email) {
+        try {
+            if (redisTemplate != null) {
+                redisTemplate.delete("PENDING_REG:" + email);
+                return;
+            }
+        } catch (Exception e) {}
+        pendingRegistrationsFallback.remove(email);
     }
 
     private void sendKafkaEvent(String message) {

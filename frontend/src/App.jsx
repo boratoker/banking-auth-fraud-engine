@@ -117,7 +117,9 @@ function App() {
     setStep('login'); setEmail(''); setFirstName(''); setLastName('');
     setPassword(''); setConfirmPassword(''); setOtp('');
     setMessage(''); setError(''); setUserName(''); setOtpMode('login'); setTimeLeft(120);
+    import('./api/bankingApi').then(m => m.setAuthEmail(null));
   };
+
 
   // Step 1: E-posta kontrol
   const handleCheckEmail = async (e) => {
@@ -279,11 +281,13 @@ function App() {
       const res = await verifyOtp(email, otp, otpMode);
       setMessage(res.data.message);
       setUserName(res.data.firstName || '');
+      import('./api/bankingApi').then(m => m.setAuthEmail(email));
       setStep('success');
     } catch (err) {
       setError(err.response?.data?.error || err.message);
     } finally { setLoading(false); }
   };
+
 
   if (step === 'success') {
     return (

@@ -11,11 +11,11 @@ export const login = async (email) => {
 };
 
 export const verifyPassword = async (email, password) => {
-  return await apiClient.post(`${AUTH_PREFIX}/verify-password`, { email, password });
+  return await apiClient.post(`${AUTH_PREFIX}/verify-password`, { email, password, channel: 'MOBILE' });
 };
 
 export const register = async (email, firstName, lastName, password) => {
-  return await apiClient.post(`${AUTH_PREFIX}/register`, { email, firstName, lastName, password });
+  return await apiClient.post(`${AUTH_PREFIX}/register`, { email, firstName, lastName, password, channel: 'MOBILE' });
 };
 
 export const verifyOtp = async (email, otp, mode) => {

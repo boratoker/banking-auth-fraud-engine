@@ -30,6 +30,18 @@ export const verifyTransferOtp = async (otpData) => {
   return await axios.post(`${API_BASE_URL}/transfers/verify-otp`, otpData);
 };
 
+export const getPendingPushChallenges = async () => {
+  return await axios.get(`${API_BASE_URL}/transfers/pending-push`);
+};
+
+export const verifyPushApproval = async (data) => {
+  return await axios.post(`${API_BASE_URL}/transfers/verify-push`, data);
+};
+
+export const getTransferStatus = async (transactionId) => {
+  return await axios.get(`${API_BASE_URL}/transfers/status/${transactionId}`);
+};
+
 export const getSecuritySessions = async () => {
   return await axios.get(`${API_BASE_URL}/security/sessions`);
 };
@@ -44,4 +56,12 @@ export const getTransactions = async () => {
 
 export const getContacts = async () => {
   return await axios.get(`${API_BASE_URL}/contacts`);
+};
+
+export const setAuthEmail = (email) => {
+  if (email) {
+    axios.defaults.headers.common['X-User-Email'] = email;
+  } else {
+    delete axios.defaults.headers.common['X-User-Email'];
+  }
 };

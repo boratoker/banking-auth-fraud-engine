@@ -5,6 +5,7 @@ public class RegisterRequest {
     private String firstName;
     private String lastName;
     private String password;
+    private String channel;
 
     public RegisterRequest() {}
 
@@ -19,4 +20,7 @@ public class RegisterRequest {
 
     public String getPassword() { return password; }
     public void setPassword(String password) { this.password = password; }
+
+    public String getChannel() { return channel; }
+    public void setChannel(String channel) { this.channel = channel; }
 }

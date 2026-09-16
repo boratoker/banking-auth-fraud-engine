@@ -8,10 +8,9 @@ import {
   StyleSheet,
   ActivityIndicator,
   Animated,
-  LayoutAnimation,
-  Platform,
-  UIManager,
   Image,
+  Platform,
+  Vibration,
 } from 'react-native';
 import { checkEmail, login, verifyPassword, register, verifyOtp } from '../api/authApi';
 import { colors } from '../theme/colors';
@@ -55,6 +54,33 @@ const AuthScreen = ({ onAuthSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [timeLeft, setTimeLeft] = useState(120);
   const [failedLoginInfo, setFailedLoginInfo] = useState(null);
+
+  const [pushNotification, setPushNotification] = useState(null);
+  const pushAnim = useRef(new Animated.Value(-150)).current;
+
+  const showInAppPush = (title, body) => {
+    setPushNotification({ title, body });
+    Vibration.vibrate([0, 250, 100, 250]); // Titreşim (SMS/Push hissi)
+    Animated.spring(pushAnim, {
+      toValue: 20,
+      useNativeDriver: true,
+      tension: 50,
+      friction: 7,
+    }).start();
+
+    // 10 saniye sonra gizle
+    setTimeout(() => {
+      dismissInAppPush();
+    }, 10000);
+  };
+
+  const dismissInAppPush = () => {
+    Animated.timing(pushAnim, {
+      toValue: -150,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => setPushNotification(null));
+  };
 
   const setStep = (newStep) => { animateLayout(); setStepState(newStep); };
   const setPassword = (val) => { animateLayout(); setPasswordState(val); };
@@ -124,14 +150,19 @@ const AuthScreen = ({ onAuthSuccess }) => {
 
     try {
       const res = await verifyPassword(email, password);
-      setMessage(res.data.message || 'Şifre doğrulandı. OTP kodunuz e-posta adresinize gönderildi.');
+      setMessage(res.data.message || 'Şifre doğrulandı.');
+      
+      if (res.data.isPushOtp && res.data.devPushOtpCode) {
+        showInAppPush("TokerBank Mobil Onay", `Giriş Kodunuz: ${res.data.devPushOtpCode}`);
+      }
+      
       setUserName(res.data.firstName || '');
       if (res.data.lastFailedLoginAt) {
         setFailedLoginInfo(res.data.lastFailedLoginAt);
       } else {
         setFailedLoginInfo(null);
       }
-      setPassword('');
+      // setPassword('') kaldırıldı (tekrar gönder için lazım)
     } catch (err) {
       if (err.response?.status === 404 || err.response?.data?.userNotFound) {
         setMessage(`${email} adresi ile kayıtlı kullanıcı bulunamadı. Lütfen yeni hesap oluşturun.`);
@@ -145,6 +176,7 @@ const AuthScreen = ({ onAuthSuccess }) => {
 
   // Step 2b: Kayıt (Asenkron Anında Geçiş)
   const handleRegister = async () => {
+    if (!email || !email.includes('@')) { setError('Lütfen geçerli bir e-posta giriniz.'); return; }
     if (!firstName || !lastName) { setError('Ad ve soyadı doldurunuz.'); return; }
     if (!isPasswordValid) { setError('Şifre tüm güvenlik kurallarını karşılamalıdır.'); return; }
     if (password !== confirmPassword) { setError('Şifreler eşleşmiyor.'); return; }
@@ -158,8 +190,13 @@ const AuthScreen = ({ onAuthSuccess }) => {
 
     try {
       const res = await register(email, firstName, lastName, password);
-      setMessage(res.data.message || 'Kayıt başarılı! Doğrulama kodu gönderildi.');
-      setPassword('');
+      setMessage(res.data.message || 'Kayıt başarılı!');
+      
+      if (res.data.isPushOtp && res.data.devPushOtpCode) {
+        showInAppPush("TokerBank Mobil Onay", `Kayıt Doğrulama Kodunuz: ${res.data.devPushOtpCode}`);
+      }
+      
+      // setPassword('') kaldırıldı (tekrar gönder için lazım)
     } catch (err) {
       setError(err.response?.data?.error || 'Kayıt talebi başarısız.');
       setStep('register');
@@ -173,10 +210,15 @@ const AuthScreen = ({ onAuthSuccess }) => {
       if (otpMode === 'register') {
         const res = await register(email, firstName, lastName, password);
         setMessage(res.data.message || 'Yeni kod gönderildi.');
+        if (res.data.isPushOtp && res.data.devPushOtpCode) {
+          showInAppPush("TokerBank Mobil Onay", `Kayıt Doğrulama Kodunuz: ${res.data.devPushOtpCode}`);
+        }
       } else {
-        setMessage('Şifrenizi tekrar girerek OTP isteyin.');
-        setStep('login');
-        return;
+        const res = await verifyPassword(email, password);
+        setMessage(res.data.message || 'Yeni kod gönderildi.');
+        if (res.data.isPushOtp && res.data.devPushOtpCode) {
+          showInAppPush("TokerBank Mobil Onay", `Giriş Kodunuz: ${res.data.devPushOtpCode}`);
+        }
       }
       setTimeLeft(120); setOtp('');
     } catch (err) {
@@ -192,6 +234,7 @@ const AuthScreen = ({ onAuthSuccess }) => {
     try {
       const res = await verifyOtp(email, otp, otpMode);
       const name = res.data.firstName || userName || 'Değerli Müşterimiz';
+      setPassword(''); // Başarılı olunca şifreyi temizle
       onAuthSuccess({ email, userName: name, failedLoginInfo });
     } catch (err) {
       setError(err.response?.data?.error || 'Doğrulama başarısız.');
@@ -199,8 +242,20 @@ const AuthScreen = ({ onAuthSuccess }) => {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-      <View style={styles.card}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {/* Özel In-App Push Notification (Üstten Düşen Banner) */}
+      <Animated.View style={[styles.inAppPushContainer, { transform: [{ translateY: pushAnim }] }]}>
+        <TouchableOpacity style={styles.inAppPushContent} activeOpacity={0.8} onPress={dismissInAppPush}>
+          <Image source={require('../assets/tokerbank logo.png')} style={styles.inAppPushIcon} />
+          <View style={styles.inAppPushTextContainer}>
+            <Text style={styles.inAppPushTitle}>{pushNotification?.title}</Text>
+            <Text style={styles.inAppPushBody}>{pushNotification?.body}</Text>
+          </View>
+        </TouchableOpacity>
+      </Animated.View>
+
+      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+        <View style={styles.card}>
         {/* Header */}
         <View style={[styles.headerBox, step === 'register' && { marginBottom: 10 }]}>
           <Image
@@ -269,8 +324,19 @@ const AuthScreen = ({ onAuthSuccess }) => {
         {step === 'register' && (
           <View style={globalStyles.inputGroup}>
             <Text style={[styles.stepInfo, { marginBottom: 10 }]}>
-              <Text style={{ color: colors.primary }}>{email}</Text> ile yeni hesap oluşturun:
+              Yeni hesap oluşturun:
             </Text>
+
+            <Text style={globalStyles.label}>E-POSTA ADRESİ</Text>
+            <TextInput 
+              style={[globalStyles.input, { marginBottom: 15 }]} 
+              placeholder="ornek@gmail.com"
+              placeholderTextColor={colors.textDim} 
+              value={email} 
+              onChangeText={setEmail} 
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
 
             <View style={{ flexDirection: 'row', gap: 10 }}>
               <View style={{ flex: 1 }}>
@@ -366,7 +432,7 @@ const AuthScreen = ({ onAuthSuccess }) => {
           <View style={globalStyles.inputGroup}>
             <Text style={styles.stepInfo}>
               Hoş geldiniz{userName ? `, ${userName}` : ''}!{'\n'}
-              <Text style={{ fontWeight: 'bold', color: colors.text }}>{maskEmail(email)}</Text> adresine gönderilen 6 haneli kodu giriniz.
+              <Text style={{ fontWeight: 'bold', color: colors.text }}>Mobil cihazınıza</Text> gönderilen 6 haneli kodu giriniz.
             </Text>
             <View style={[globalStyles.timerBadge, timeLeft === 0 && globalStyles.timerBadgeExpired]}>
               <Text style={[globalStyles.timerText, timeLeft === 0 && globalStyles.timerTextExpired]}>
@@ -397,7 +463,7 @@ const AuthScreen = ({ onAuthSuccess }) => {
         {step === 'register-otp' && (
           <View style={globalStyles.inputGroup}>
             <Text style={styles.stepInfo}>
-              <Text style={{ fontWeight: 'bold', color: colors.text }}>{maskEmail(email)}</Text> adresine gönderilen kayıt doğrulama kodunu giriniz.
+              <Text style={{ fontWeight: 'bold', color: colors.text }}>Mobil cihazınıza</Text> gönderilen kayıt doğrulama kodunu giriniz.
             </Text>
             <View style={[globalStyles.timerBadge, timeLeft === 0 && globalStyles.timerBadgeExpired]}>
               <Text style={[globalStyles.timerText, timeLeft === 0 && globalStyles.timerTextExpired]}>
@@ -425,6 +491,7 @@ const AuthScreen = ({ onAuthSuccess }) => {
         )}
       </View>
     </ScrollView>
+    </View>
   );
 };
 
@@ -519,6 +586,46 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     letterSpacing: 6,
     color: colors.primary,
+  },
+  inAppPushContainer: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 40 : 20,
+    left: 16,
+    right: 16,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 16,
+    zIndex: 9999,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)',
+  },
+  inAppPushContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  inAppPushIcon: {
+    width: 32,
+    height: 32,
+    resizeMode: 'contain',
+    marginRight: 12,
+  },
+  inAppPushTextContainer: {
+    flex: 1,
+  },
+  inAppPushTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#333333',
+    marginBottom: 4,
+  },
+  inAppPushBody: {
+    fontSize: 13,
+    color: '#666666',
   },
 });
 

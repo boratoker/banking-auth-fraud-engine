@@ -25,5 +25,13 @@ const apiClient = axios.create({
   timeout: 10000,
 });
 
+export const setAuthEmail = (email) => {
+  if (email) {
+    apiClient.defaults.headers.common['X-User-Email'] = email;
+  } else {
+    delete apiClient.defaults.headers.common['X-User-Email'];
+  }
+};
+
 export default apiClient;
 
