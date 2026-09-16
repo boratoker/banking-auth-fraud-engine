@@ -48,7 +48,7 @@ public class BankingController {
 
     // Demo için yardımcı metod (Authentication kapalı olduğu için)
     // Güncelleme: Artık X-User-Email header'ından aktif kullanıcıyı okur.
-    private UUID getDemoUserId() {
+    private synchronized UUID getDemoUserId() {
         org.springframework.web.context.request.ServletRequestAttributes attrs = 
             (org.springframework.web.context.request.ServletRequestAttributes) org.springframework.web.context.request.RequestContextHolder.getRequestAttributes();
         String email = "toker2003@gmail.com";
