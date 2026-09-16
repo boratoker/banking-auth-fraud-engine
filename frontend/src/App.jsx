@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { checkEmail, login, verifyPassword, register, verifyOtp, forgotPasswordInit, forgotPasswordVerifyOtp, forgotPasswordReset } from './api/authApi';
+import { setAuthEmail } from './api/bankingApi';
 import MainDashboardView from './view/MainDashboardView';
 import tokerbankLogo from './assets/tokerbank-logo.png';
 import './App.css';
@@ -117,7 +118,7 @@ function App() {
     setStep('login'); setEmail(''); setFirstName(''); setLastName('');
     setPassword(''); setConfirmPassword(''); setOtp('');
     setMessage(''); setError(''); setUserName(''); setOtpMode('login'); setTimeLeft(120);
-    import('./api/bankingApi').then(m => m.setAuthEmail(null));
+    setAuthEmail(null);
   };
 
 
@@ -281,7 +282,7 @@ function App() {
       const res = await verifyOtp(email, otp, otpMode);
       setMessage(res.data.message);
       setUserName(res.data.firstName || '');
-      import('./api/bankingApi').then(m => m.setAuthEmail(email));
+      setAuthEmail(email);
       setStep('success');
     } catch (err) {
       setError(err.response?.data?.error || err.message);
