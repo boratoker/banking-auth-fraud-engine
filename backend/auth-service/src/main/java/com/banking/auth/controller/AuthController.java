@@ -6,7 +6,9 @@ import com.banking.auth.dto.VerifyOtpRequest;
 import com.banking.auth.dto.VerifyPasswordRequest;
 import com.banking.auth.dto.ForgotPasswordResetRequest;
 import com.banking.auth.model.User;
+import com.banking.auth.model.UserSession;
 import com.banking.auth.repository.UserRepository;
+import com.banking.auth.repository.UserSessionRepository;
 import com.banking.auth.service.EmailService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,14 +47,16 @@ public class AuthController {
 
     private final EmailService emailService;
     private final UserRepository userRepository;
+    private final UserSessionRepository userSessionRepository;
 
     // Fallback in-memory map for OTP storage if Redis is offline
     private final Map<String, String> otpFallbackMap = new ConcurrentHashMap<>();
     private final Map<String, String> pendingRegistrationsFallback = new ConcurrentHashMap<>();
 
-    public AuthController(EmailService emailService, UserRepository userRepository) {
+    public AuthController(EmailService emailService, UserRepository userRepository, UserSessionRepository userSessionRepository) {
         this.emailService = emailService;
         this.userRepository = userRepository;
+        this.userSessionRepository = userSessionRepository;
     }
 
     // Step 1: E-posta DB'de var mı kontrol et
@@ -259,6 +263,22 @@ public class AuthController {
 
             sendKafkaEvent("LOGIN_SUCCESS:" + email);
 
+            // Cihaz oturumunu kaydet veya güncelle
+            String fp = request.getFingerprint() != null ? request.getFingerprint() : "FP-UNKNOWN";
+            UserSession session = userSessionRepository.findFirstByUserIdAndDeviceFingerprintOrderByLastActiveAtDesc(user.getId(), fp)
+                .orElse(new UserSession());
+
+            session.setUser(user);
+            session.setDeviceInfo(request.getDeviceInfo() != null ? request.getDeviceInfo() : "Unknown Device");
+            session.setDeviceType(request.getDeviceType() != null ? request.getDeviceType() : "MOBILE");
+            session.setIpAddress(request.getIpAddress() != null ? request.getIpAddress() : "127.0.0.1");
+            session.setLocation(request.getLocation() != null ? request.getLocation() : "Unknown");
+            session.setDeviceFingerprint(fp);
+            session.setBrowser(request.getBrowser() != null ? request.getBrowser() : "Mobile App");
+            session.setActive(true);
+            session.setLastActiveAt(LocalDateTime.now());
+            userSessionRepository.save(session);
+
             String msg = "register".equals(mode)
                 ? "Kayıt tamamlandı! E-posta doğrulandı. Hoş geldiniz, " + user.getFirstName() + "!"
                 : "Giriş başarılı! Hoş geldiniz, " + user.getFirstName() + "!";
@@ -267,7 +287,8 @@ public class AuthController {
                 "message", msg,
                 "firstName", user.getFirstName(),
                 "lastName", user.getLastName(),
-                "email", user.getEmail()
+                "email", user.getEmail(),
+                "userId", user.getId().toString()
             ));
         }
 

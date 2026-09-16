@@ -33,7 +33,12 @@ const TransferScreen = () => {
   const [fraudModalData, setFraudModalData] = useState(null);
   const [modalOtpInput, setModalOtpInput] = useState('');
 
+  const [accountBalance, setAccountBalance] = useState('');
+  const [accountIban, setAccountIban] = useState('');
+  const [accountName, setAccountName] = useState('Yükleniyor...');
+
   useEffect(() => {
+    // Fetch Contacts
     getContacts()
       .then(res => {
         if (Array.isArray(res.data)) {
@@ -41,6 +46,23 @@ const TransferScreen = () => {
         }
       })
       .catch(() => {});
+
+    // Fetch Accounts
+    import('../api/bankingApi').then(({ getAccounts }) => {
+      getAccounts()
+        .then(res => {
+          if (Array.isArray(res.data)) {
+            const demandAccount = res.data.find(a => a.accountType === 'DEMAND') || res.data[0];
+            if (demandAccount) {
+              setSelectedAccount(demandAccount.id);
+              setAccountBalance(demandAccount.balance);
+              setAccountIban(demandAccount.iban);
+              setAccountName(demandAccount.name);
+            }
+          }
+        })
+        .catch(() => setAccountName('Hesap Bulunamadı'));
+    });
   }, []);
 
   const handleTransferSubmit = async () => {
@@ -168,8 +190,8 @@ const TransferScreen = () => {
         <View style={globalStyles.inputGroup}>
           <Text style={globalStyles.label}>GÖNDEREN HESAP</Text>
           <View style={styles.accountBox}>
-            <Text style={styles.accountBoxTitle}>Ana Vadesiz TL Hesabı</Text>
-            <Text style={styles.accountBoxSub}>Bakiye: ₺148,250.75 • TR32...7890</Text>
+            <Text style={styles.accountBoxTitle}>{accountName}</Text>
+            <Text style={styles.accountBoxSub}>Bakiye: ₺{accountBalance ? accountBalance.toLocaleString('tr-TR') : '...'} • {accountIban ? accountIban.replace(/(.{4})/g, '$1 ').trim() : ''}</Text>
           </View>
         </View>
 

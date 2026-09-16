@@ -224,7 +224,7 @@ const SecurityView = () => {
             {activeSessions.map((session) => (
               <div key={session.id} className="session-item">
                 <div className="device-icon">
-                  {session.device && (session.device.includes('MacBook') || session.device.includes('Windows')) ? '💻' : '📱'}
+                  {session.deviceType === 'WEB' ? '💻' : '📱'}
                 </div>
                 <div className="session-info">
                   <div className="session-device-name">

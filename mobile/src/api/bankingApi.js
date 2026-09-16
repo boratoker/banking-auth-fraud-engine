@@ -1,4 +1,6 @@
 import apiClient from './config';
+import { getDeviceFingerprint, getIpAddress } from '../utils/DeviceUtils';
+import { signPayload } from '../utils/CryptoService';
 
 const BANKING_PREFIX = '/api/v1/banking';
 
@@ -31,7 +33,19 @@ export const getPushNotifications = async () => {
 };
 
 export const submitTransfer = async (transferData) => {
-  return await apiClient.post(`${BANKING_PREFIX}/transfers`, transferData);
+  const payloadString = JSON.stringify(transferData);
+  const signatureRes = await signPayload(payloadString);
+  const fingerprint = await getDeviceFingerprint();
+  const ipAddress = await getIpAddress();
+
+  const dataWithSecurity = {
+    ...transferData,
+    signature: signatureRes.success ? signatureRes.signature : null,
+    fingerprint,
+    ipAddress
+  };
+
+  return await apiClient.post(`${BANKING_PREFIX}/transfers`, dataWithSecurity);
 };
 
 export const verifyTransferOtp = async (otpData) => {

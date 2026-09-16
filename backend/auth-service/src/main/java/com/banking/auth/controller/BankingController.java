@@ -321,8 +321,31 @@ public class BankingController {
             .findFirst().orElseThrow();
 
         // Client info (Gerçek uygulamada header/token üzerinden gelir)
-        String ipAddress = "185.12.94.102"; 
-        String deviceFingerprint = "FP-MAC-123";
+        String ipAddress = (String) transferReq.getOrDefault("ipAddress", "127.0.0.1"); 
+        String deviceFingerprint = (String) transferReq.getOrDefault("fingerprint", "FP-UNKNOWN");
+        String signature = (String) transferReq.get("signature");
+
+        if (signature != null) {
+            log.info("✍️ İşlem kriptografik imzası alındı, doğrulanıyor...");
+            try {
+                org.springframework.web.client.RestTemplate restTemplate = new org.springframework.web.client.RestTemplate();
+                String payloadStr = "{\"recipientIban\":\"" + recipientIban + "\",\"recipientName\":\"" + recipientName + "\",\"amount\":" + amountDouble + ",\"description\":\"" + description + "\"}";
+                
+                Map<String, String> reqBody = new HashMap<>();
+                reqBody.put("userId", getDemoUserId().toString());
+                reqBody.put("payload", payloadStr);
+                reqBody.put("signature", signature);
+                
+                ResponseEntity<Map> res = restTemplate.postForEntity("http://localhost:8083/api/v1/signing/verify", reqBody, Map.class);
+                if (res.getStatusCode().is2xxSuccessful()) {
+                    log.info("✅ Kriptografik imza doğrulandı!");
+                } else {
+                    return ResponseEntity.badRequest().body(Map.of("error", "Geçersiz kriptografik imza!"));
+                }
+            } catch (Exception e) {
+                log.warn("⚠️ Kriptografik imza doğrulama hatası (Servis kapalı olabilir): {}", e.getMessage());
+            }
+        }
 
         try {
             // ML Fraud Engine destekli transfer işlemi
@@ -508,11 +531,23 @@ public class BankingController {
     @GetMapping("/security/sessions")
     public ResponseEntity<List<Map<String, Object>>> getSessions() {
         List<UserSession> sessions = sessionRepository.findByUserId(getDemoUserId());
+        sessions.sort((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt())); // En yeniler ilk sırada
         List<Map<String, Object>> res = new ArrayList<>();
+        Set<String> seenActiveDevices = new HashSet<>();
+
         for (UserSession s : sessions) {
+            if (s.isActive()) {
+                String fp = s.getDeviceFingerprint();
+                if (fp != null && seenActiveDevices.contains(fp)) {
+                    continue; // Sadece aynı cihazdan olan en güncel oturumu al
+                }
+                if (fp != null) seenActiveDevices.add(fp);
+            }
+            
             Map<String, Object> map = new HashMap<>();
             map.put("id", s.getId());
             map.put("device", s.getDeviceInfo());
+            map.put("deviceType", s.getDeviceType());
             map.put("ip", s.getIpAddress());
             map.put("location", s.getLocation());
             map.put("browser", s.getBrowser());

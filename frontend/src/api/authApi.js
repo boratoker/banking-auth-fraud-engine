@@ -20,7 +20,25 @@ export const register = async (email, firstName, lastName, password) => {
 };
 
 export const verifyOtp = async (email, otp, mode = 'login') => {
-  return await axios.post(`${API_BASE_URL}/verify-otp`, { email, otp, mode });
+  let deviceInfo = 'Bilgisayar';
+  if (navigator.userAgent.includes('Mac')) deviceInfo = 'Apple Mac';
+  else if (navigator.userAgent.includes('Win')) deviceInfo = 'Windows PC';
+  else if (navigator.userAgent.includes('Linux')) deviceInfo = 'Linux PC';
+  
+  const browser = navigator.userAgent.substring(0, 50); // limit to 50 chars
+  const deviceType = 'WEB';
+  const fingerprint = 'FP-WEB-' + Math.random().toString(36).substring(2, 10);
+  
+  return await axios.post(`${API_BASE_URL}/verify-otp`, { 
+    email, 
+    otp, 
+    mode,
+    deviceInfo,
+    browser,
+    deviceType,
+    fingerprint,
+    ipAddress: '127.0.0.1' // Web proxy dev environment
+  });
 };
 
 export const forgotPasswordInit = async (email) => {

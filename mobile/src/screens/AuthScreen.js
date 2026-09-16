@@ -12,7 +12,9 @@ import {
   Platform,
   Vibration,
 } from 'react-native';
-import { checkEmail, login, verifyPassword, register, verifyOtp } from '../api/authApi';
+import { checkEmail, login, verifyPassword, register, verifyOtp, enrollDevice } from '../api/authApi';
+import { generateAndEnrollKeyPair, hasEnrolledKey } from '../utils/CryptoService';
+import { getDeviceInfo } from '../utils/DeviceUtils';
 import { colors } from '../theme/colors';
 import { globalStyles } from '../theme/styles';
 
@@ -137,19 +139,17 @@ const AuthScreen = ({ onAuthSuccess }) => {
     } finally { setLoading(false); }
   };
 
-  // Step 2a: Şifre doğrulama (Asenkron Anında Geçiş)
+  // Step 2a: Şifre doğrulama
   const handleVerifyPassword = async () => {
     if (!password || !email) { setError('Lütfen e-posta ve şifrenizi giriniz.'); return; }
 
     setError('');
-    setMessage('Şifre doğrulanıyor ve doğrulama kodu gönderiliyor...');
-    setOtpMode('login');
-    setTimeLeft(120);
-    setOtp('');
-    setStep('login-otp');
+    setMessage('');
+    setLoading(true);
 
     try {
       const res = await verifyPassword(email, password);
+      // Başarılıysa OTP ekranına geç
       setMessage(res.data.message || 'Şifre doğrulandı.');
       
       if (res.data.isPushOtp && res.data.devPushOtpCode) {
@@ -162,19 +162,24 @@ const AuthScreen = ({ onAuthSuccess }) => {
       } else {
         setFailedLoginInfo(null);
       }
-      // setPassword('') kaldırıldı (tekrar gönder için lazım)
+
+      setOtpMode('login');
+      setTimeLeft(120);
+      setOtp('');
+      setStep('login-otp');
     } catch (err) {
       if (err.response?.status === 404 || err.response?.data?.userNotFound) {
         setMessage(`${email} adresi ile kayıtlı kullanıcı bulunamadı. Lütfen yeni hesap oluşturun.`);
         setStep('register');
       } else {
-        setError(err.response?.data?.error || 'Şifre yanlış veya doğrulanamadı.');
-        setStep('login');
+        setError(err.response?.data?.error || 'Şifre yanlış lütfen tekrar deneyiniz.');
       }
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Step 2b: Kayıt (Asenkron Anında Geçiş)
+  // Step 2b: Kayıt
   const handleRegister = async () => {
     if (!email || !email.includes('@')) { setError('Lütfen geçerli bir e-posta giriniz.'); return; }
     if (!firstName || !lastName) { setError('Ad ve soyadı doldurunuz.'); return; }
@@ -182,11 +187,8 @@ const AuthScreen = ({ onAuthSuccess }) => {
     if (password !== confirmPassword) { setError('Şifreler eşleşmiyor.'); return; }
 
     setError('');
-    setMessage('Hesap oluşturuluyor ve doğrulama kodu gönderiliyor...');
-    setOtpMode('register');
-    setTimeLeft(120);
-    setOtp('');
-    setStep('register-otp');
+    setMessage('');
+    setLoading(true);
 
     try {
       const res = await register(email, firstName, lastName, password);
@@ -196,10 +198,14 @@ const AuthScreen = ({ onAuthSuccess }) => {
         showInAppPush("TokerBank Mobil Onay", `Kayıt Doğrulama Kodunuz: ${res.data.devPushOtpCode}`);
       }
       
-      // setPassword('') kaldırıldı (tekrar gönder için lazım)
+      setOtpMode('register');
+      setTimeLeft(120);
+      setOtp('');
+      setStep('register-otp');
     } catch (err) {
       setError(err.response?.data?.error || 'Kayıt talebi başarısız.');
-      setStep('register');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -230,9 +236,21 @@ const AuthScreen = ({ onAuthSuccess }) => {
   const handleOtpSubmit = async () => {
     if (timeLeft === 0) { setError('Kodun süresi doldu! Yeni kod isteyin.'); return; }
     if (!otp || otp.length < 6) { setError('6 haneli kodu giriniz.'); return; }
-    setMessage(''); setError(''); setLoading(true);
+    setMessage(''); setError('Cihaz kaydediliyor, lütfen bekleyin...'); setLoading(true);
     try {
       const res = await verifyOtp(email, otp, otpMode);
+      
+      // Kriptografik anahtar üretimi ve kaydı
+      const isEnrolled = await hasEnrolledKey();
+      if (!isEnrolled) {
+        const keyRes = await generateAndEnrollKeyPair();
+        if (keyRes.success) {
+          const deviceName = getDeviceInfo();
+          const userId = res.data.userId || email; // fallback to email if userId not returned
+          await enrollDevice(userId, keyRes.publicKey, deviceName);
+        }
+      }
+
       const name = res.data.firstName || userName || 'Değerli Müşterimiz';
       setPassword(''); // Başarılı olunca şifreyi temizle
       onAuthSuccess({ email, userName: name, failedLoginInfo });

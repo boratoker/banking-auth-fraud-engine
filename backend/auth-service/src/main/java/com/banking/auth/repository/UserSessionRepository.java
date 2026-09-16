@@ -11,4 +11,5 @@ import java.util.UUID;
 public interface UserSessionRepository extends JpaRepository<UserSession, UUID> {
     List<UserSession> findByUserIdAndIsActiveTrue(UUID userId);
     List<UserSession> findByUserId(UUID userId);
+    java.util.Optional<UserSession> findFirstByUserIdAndDeviceFingerprintOrderByLastActiveAtDesc(UUID userId, String deviceFingerprint);
 }
