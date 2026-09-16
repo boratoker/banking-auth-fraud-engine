@@ -57,7 +57,6 @@ const MainDashboardView = ({ userName, email, onLogout }) => {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         onNavigate={handleNavigate}
-        userRiskScore={98}
       />
       <div className="dashboard-body">
         <Sidebar 

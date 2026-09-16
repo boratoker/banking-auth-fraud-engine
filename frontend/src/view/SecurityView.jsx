@@ -1,24 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { getSecuritySessions, terminateSession } from '../api/bankingApi';
+import { getSecuritySessions, terminateSession, getOverviewData } from '../api/bankingApi';
 
 const SecurityView = () => {
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(true);
   const [biometricsEnabled, setBiometricsEnabled] = useState(true);
   const [fraudAlertsEnabled, setFraudAlertsEnabled] = useState(true);
   const [dailyLimit, setDailyLimit] = useState(50000);
-
-  const [activeSessions, setActiveSessions] = useState([
-    { id: 1, device: 'MacBook Pro (macOS 15.1)', ip: '185.12.94.102', location: 'İstanbul, Türkiye', browser: 'Chrome 128.0', isCurrent: true, time: 'Aktif Oturum' },
-    { id: 2, device: 'iPhone 15 Pro (iOS 18)', ip: '212.156.40.18', location: 'İstanbul, Türkiye', browser: 'Mobile Safari', isCurrent: false, time: '3 saat önce' },
-    { id: 3, device: 'Windows Desktop', ip: '88.241.12.50', location: 'Ankara, Türkiye', browser: 'Edge 126.0', isCurrent: false, time: 'Dün, 19:40' },
-  ]);
+  const [activeSessions, setActiveSessions] = useState([]);
+  const [overview, setOverview] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getSecuritySessions()
-      .then(res => {
+    Promise.all([
+      getSecuritySessions().then(res => {
         if (Array.isArray(res.data)) setActiveSessions(res.data);
-      })
-      .catch(() => {});
+      }).catch(() => {}),
+      getOverviewData().then(res => {
+        if (res.data) setOverview(res.data);
+      }).catch(() => {})
+    ]).finally(() => setLoading(false));
   }, []);
 
   const handleTerminateSession = async (id) => {
@@ -29,6 +29,16 @@ const SecurityView = () => {
       // Fallback
     }
   };
+
+  const riskPercent = overview?.riskScore != null ? (100 - overview.riskScore) : null;
+  const riskLabel = riskPercent == null
+    ? 'Hesaplanıyor'
+    : riskPercent <= 10 ? `GÜVENLİ (%${riskPercent} Risk)`
+    : riskPercent <= 30 ? `DİKKAT (%${riskPercent} Risk)`
+    : `YÜKSEK RİSK (%${riskPercent} Risk)`;
+  const riskClass = riskPercent == null ? '' : riskPercent <= 10 ? 'safe' : riskPercent <= 30 ? 'medium' : 'high';
+
+  const activeSession = activeSessions.find(s => s.isCurrent);
 
   return (
     <div className="view-container security-view">
@@ -42,25 +52,33 @@ const SecurityView = () => {
         <div className="widget-card risk-assessment-card">
           <div className="card-header">
             <h3>Cihaz ve Oturum Risk Değerlendirmesi</h3>
-            <span className="risk-level-badge safe">GÜVENLİ (%2 Risk)</span>
+            {!loading && (
+              <span className={`risk-level-badge ${riskClass}`}>{riskLabel}</span>
+            )}
           </div>
 
           <div className="risk-metrics-row">
             <div className="metric-box">
               <span className="metric-label">Cihaz Parmak İzi</span>
-              <span className="metric-val text-success">Eşleşti (Güvenilir)</span>
+              <span className="metric-val text-success">
+                {activeSession ? 'Eşleşti (Güvenilir)' : 'Bilinmiyor'}
+              </span>
             </div>
             <div className="metric-box">
               <span className="metric-label">Statik / Dinamik IP</span>
-              <span className="metric-val">185.12.94.102</span>
+              <span className="metric-val">
+                {activeSession?.ip || overview?.lastSessionIp || '—'}
+              </span>
             </div>
             <div className="metric-box">
               <span className="metric-label">Giriş Metodu</span>
               <span className="metric-val">OTP + Email Verified</span>
             </div>
             <div className="metric-box">
-              <span className="metric-label">Anomalı Skoru</span>
-              <span className="metric-val text-success">0.02 (Çok Düşük)</span>
+              <span className="metric-label">Son Oturum Konumu</span>
+              <span className="metric-val">
+                {activeSession?.location || overview?.lastSessionLocation || '—'}
+              </span>
             </div>
           </div>
         </div>
@@ -140,6 +158,11 @@ const SecurityView = () => {
           </div>
 
           <div className="sessions-list">
+            {activeSessions.length === 0 && !loading && (
+              <p style={{ color: '#64748b', textAlign: 'center', padding: '16px' }}>
+                Kayıtlı aktif oturum bulunamadı.
+              </p>
+            )}
             {activeSessions.map((session) => (
               <div key={session.id} className="session-item">
                 <div className="device-icon">

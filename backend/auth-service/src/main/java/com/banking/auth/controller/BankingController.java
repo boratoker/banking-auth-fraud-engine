@@ -120,7 +120,39 @@ public class BankingController {
         data.put("savingsBalance", savingsBalance);
         data.put("creditCardSpent", creditCardSpent);
         data.put("creditCardLimit", creditCardLimit);
+
+        // Vadesiz hesap IBAN (ilk DEMAND hesap)
+        accounts.stream()
+            .filter(a -> "DEMAND".equals(a.getAccountType()))
+            .findFirst()
+            .ifPresent(a -> data.put("demandAccountIban", formatIban(a.getIban())));
+
+        // Vadeli hesap faiz oranı ve vade tarihi
+        accounts.stream()
+            .filter(a -> "TIME_DEPOSIT".equals(a.getAccountType()))
+            .findFirst()
+            .ifPresent(a -> {
+                data.put("savingsInterestRate", a.getInterestRate());
+                data.put("savingsMaturityDate", a.getMaturityDate() != null
+                    ? a.getMaturityDate().format(java.time.format.DateTimeFormatter.ofPattern("d MMMM yyyy", new java.util.Locale("tr", "TR")))
+                    : null);
+            });
+
+        // Kredi kartı adı/tipi
+        if (!cards.isEmpty()) {
+            data.put("creditCardName", cards.get(0).getCardType().replace("_", " "));
+        }
+
+        // Bu ayın gelir hareketi (pozitif tutarlar)
         List<Transaction> allTxs = bankingService.getUserTransactions(getDemoUserId());
+        java.time.LocalDateTime startOfMonth = java.time.LocalDateTime.now().withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0);
+        BigDecimal monthlyIncome = allTxs.stream()
+            .filter(tx -> tx.getAmount() != null && tx.getAmount().compareTo(BigDecimal.ZERO) > 0
+                && tx.getCreatedAt() != null && tx.getCreatedAt().isAfter(startOfMonth))
+            .map(Transaction::getAmount)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        data.put("monthlyIncome", monthlyIncome);
+
         double avgRisk = allTxs.stream()
             .mapToDouble(tx -> tx.getRiskScore() != null ? tx.getRiskScore().doubleValue() : 0.0)
             .average()
@@ -140,6 +172,18 @@ public class BankingController {
             data.put("riskMessage", "Hesabınızda yüksek riskli işlemler tespit edildi. Lütfen geçmişinizi inceleyin.");
         }
 
+        // Son aktif oturum bilgisi
+        List<UserSession> sessions = sessionRepository.findByUserId(getDemoUserId());
+        sessions.stream()
+            .filter(UserSession::isActive)
+            .findFirst()
+            .ifPresent(s -> {
+                data.put("lastSessionLocation", s.getLocation());
+                data.put("lastSessionDevice", s.getDeviceInfo());
+                data.put("lastSessionBrowser", s.getBrowser());
+                data.put("lastSessionIp", s.getIpAddress());
+            });
+
         List<Transaction> recentTxs = bankingService.getUserRecentTransactions(getDemoUserId());
         List<Map<String, Object>> txList = new ArrayList<>();
         for (Transaction tx : recentTxs) {
@@ -157,6 +201,12 @@ public class BankingController {
         
         data.put("recentTransactions", txList.subList(0, Math.min(4, txList.size())));
         return ResponseEntity.ok(data);
+    }
+
+    /** IBAN'ı TR32 0006 1000 ... formatında döndürür */
+    private String formatIban(String iban) {
+        if (iban == null) return "";
+        return iban.replaceAll("(.{4})", "$1 ").trim();
     }
 
     // --- GET /api/v1/banking/accounts ---

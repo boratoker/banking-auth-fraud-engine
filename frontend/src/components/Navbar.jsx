@@ -4,7 +4,7 @@ import GlobalSearch from './GlobalSearch';
 import { getOverviewData } from '../api/bankingApi';
 
 const Navbar = ({ userName, email, onLogout, onNavigate }) => {
-  const [userRiskScore, setUserRiskScore] = useState(100);
+  const [userRiskScore, setUserRiskScore] = useState(null);
   const [riskStatus, setRiskStatus] = useState('Yükleniyor...');
 
   useEffect(() => {
@@ -40,7 +40,7 @@ const Navbar = ({ userName, email, onLogout, onNavigate }) => {
         <div className="fraud-status-badge tooltip" title={`Güvenlik Durumu: ${riskStatus}`}>
           <span className="pulse-dot"></span>
           <span className="status-label">Fraud Shield Active</span>
-          <span className="score-pill">{userRiskScore}/100</span>
+          <span className="score-pill">{userRiskScore !== null ? `${userRiskScore}/100` : '...'}</span>
         </div>
 
         {/* User Info & Profile */}

@@ -8,6 +8,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { getSecuritySessions, terminateSession } from '../api/bankingApi';
+import { getOverviewData } from '../api/bankingApi';
 import { colors } from '../theme/colors';
 import { globalStyles } from '../theme/styles';
 
@@ -15,21 +16,19 @@ const SecurityScreen = () => {
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(true);
   const [biometricsEnabled, setBiometricsEnabled] = useState(true);
   const [fraudAlertsEnabled, setFraudAlertsEnabled] = useState(true);
-
-  const [activeSessions, setActiveSessions] = useState([
-    { id: 1, device: 'iPhone 15 Pro (TokerBank Mobile)', ip: '185.12.94.102', location: 'İstanbul, TR', browser: 'Mobile App v1.0', isCurrent: true, time: 'Aktif Oturum' },
-    { id: 2, device: 'MacBook Pro (macOS 15.1)', ip: '185.12.94.102', location: 'İstanbul, TR', browser: 'Chrome Web', isCurrent: false, time: '2 saat önce' },
-    { id: 3, device: 'Windows Desktop', ip: '88.241.12.50', location: 'Ankara, TR', browser: 'Edge 126.0', isCurrent: false, time: 'Dün, 19:40' },
-  ]);
+  const [activeSessions, setActiveSessions] = useState([]);
+  const [overview, setOverview] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getSecuritySessions()
-      .then((res) => {
-        if (Array.isArray(res.data) && res.data.length > 0) {
-          setActiveSessions(res.data);
-        }
-      })
-      .catch(() => {});
+    Promise.all([
+      getSecuritySessions()
+        .then((res) => { if (Array.isArray(res.data) && res.data.length > 0) setActiveSessions(res.data); })
+        .catch(() => {}),
+      getOverviewData()
+        .then((res) => { if (res.data) setOverview(res.data); })
+        .catch(() => {})
+    ]).finally(() => setLoading(false));
   }, []);
 
   const handleTerminate = async (id) => {
@@ -41,6 +40,14 @@ const SecurityScreen = () => {
     }
   };
 
+  const riskPercent = overview?.riskScore != null ? (100 - overview.riskScore) : null;
+  const riskLabel = riskPercent == null
+    ? 'Hesaplanıyor'
+    : riskPercent <= 10 ? `GÜVENLİ (%${riskPercent} Risk)`
+    : riskPercent <= 30 ? `DİKKAT (%${riskPercent} Risk)`
+    : `YÜKSEK RİSK (%${riskPercent} Risk)`;
+  const activeSession = activeSessions.find(s => s.isCurrent);
+
   return (
     <ScrollView contentContainerStyle={styles.scrollContent}>
       <Text style={globalStyles.title}>Güvenlik & Risk Yönetimi</Text>
@@ -50,27 +57,37 @@ const SecurityScreen = () => {
       <View style={styles.riskCard}>
         <View style={styles.riskHeader}>
           <Text style={styles.riskCardTitle}>Cihaz & Oturum Risk Değerlendirmesi</Text>
-          <View style={styles.safeBadge}>
-            <Text style={styles.safeBadgeText}>GÜVENLİ (%2 Risk)</Text>
-          </View>
+          {!loading && (
+            <View style={[styles.safeBadge, riskPercent != null && riskPercent > 10 ? styles.warnBadge : {}]}>
+              <Text style={[styles.safeBadgeText, riskPercent != null && riskPercent > 10 ? styles.warnBadgeText : {}]}>
+                {riskLabel}
+              </Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.metricsGrid}>
           <View style={styles.metricItem}>
             <Text style={styles.metricLabel}>Cihaz Parmak İzi</Text>
-            <Text style={styles.metricValSuccess}>Eşleşti (Güvenilir)</Text>
+            <Text style={styles.metricValSuccess}>
+              {activeSession ? 'Eşleşti (Güvenilir)' : 'Bilinmiyor'}
+            </Text>
           </View>
           <View style={styles.metricItem}>
             <Text style={styles.metricLabel}>Cihaz İstemcisi</Text>
-            <Text style={styles.metricVal}>iOS / Android Mobile</Text>
+            <Text style={styles.metricVal}>
+              {activeSession?.browser || overview?.lastSessionBrowser || '—'}
+            </Text>
           </View>
           <View style={styles.metricItem}>
             <Text style={styles.metricLabel}>Giriş Yöntemi</Text>
             <Text style={styles.metricVal}>2-Min OTP + Push</Text>
           </View>
           <View style={styles.metricItem}>
-            <Text style={styles.metricLabel}>Anomali Skoru</Text>
-            <Text style={styles.metricValSuccess}>0.02 (Çok Düşük)</Text>
+            <Text style={styles.metricLabel}>Son Konum</Text>
+            <Text style={styles.metricVal}>
+              {activeSession?.location || overview?.lastSessionLocation || '—'}
+            </Text>
           </View>
         </View>
       </View>
@@ -125,10 +142,17 @@ const SecurityScreen = () => {
           <Text style={styles.sectionTitle}>Aktif Oturumlar ({activeSessions.length})</Text>
         </View>
 
+        {activeSessions.length === 0 && !loading && (
+          <Text style={{ color: colors.textMuted, textAlign: 'center', paddingVertical: 16 }}>
+            Kayıtlı aktif oturum bulunamadı.
+          </Text>
+        )}
+
         {activeSessions.map((session) => (
-          <View key={session.id} style={styles.sessionItem}>
+          <View key={String(session.id)} style={styles.sessionItem}>
             <Text style={styles.deviceIcon}>
-              {session.device.includes('iPhone') ? '📱' : session.device.includes('MacBook') ? '💻' : '🖥️'}
+              {session.device?.includes('iPhone') || session.device?.includes('Mobile') ? '📱'
+                : session.device?.includes('MacBook') ? '💻' : '🖥️'}
             </Text>
 
             <View style={{ flex: 1 }}>
@@ -194,6 +218,12 @@ const styles = StyleSheet.create({
     color: colors.success,
     fontSize: 11,
     fontWeight: '700',
+  },
+  warnBadge: {
+    backgroundColor: 'rgba(251, 146, 60, 0.15)',
+  },
+  warnBadgeText: {
+    color: '#fb923c',
   },
   metricsGrid: {
     flexDirection: 'row',

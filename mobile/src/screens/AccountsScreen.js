@@ -13,51 +13,47 @@ import { globalStyles } from '../theme/styles';
 
 const AccountsScreen = () => {
   const [showCardDetails, setShowCardDetails] = useState(false);
-  const [isCardFrozen, setIsCardFrozen] = useState(false);
-  const [internetAllowed, setInternetAllowed] = useState(true);
-  const [overseasAllowed, setOverseasAllowed] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState(null);
-
-  const [accounts, setAccounts] = useState([
-    { id: 1, name: 'Ana Vadesiz TL Hesabı', iban: 'TR32 0006 1000 0000 1234 5678 90', balance: 148250.75, currency: 'TRY', type: 'Vadesiz' },
-    { id: 2, name: 'Büyüyen Vadeli Birikim', iban: 'TR32 0006 1000 0000 9876 5432 11', balance: 85000.0, currency: 'TRY', type: 'Vadeli (%48.5)' },
-    { id: 3, name: 'USD Döviz Hesabı', iban: 'TR32 0006 1000 0000 4455 6677 88', balance: 4250.0, currency: 'USD', type: 'Döviz' },
-    { id: 4, name: 'EUR Döviz Hesabı', iban: 'TR32 0006 1000 0000 1122 3344 55', balance: 1800.5, currency: 'EUR', type: 'Döviz' },
-  ]);
+  const [accounts, setAccounts] = useState([]);
+  const [cards, setCards] = useState([]);
+  const [activeCardIndex, setActiveCardIndex] = useState(0);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getAccounts()
-      .then((res) => {
-        if (Array.isArray(res.data)) setAccounts(res.data);
-      })
-      .catch(() => {});
-
-    getCardDetails()
-      .then((res) => {
-        if (res.data) {
-          setIsCardFrozen(!!res.data.isFrozen);
-          setInternetAllowed(res.data.internetAllowed !== false);
-          setOverseasAllowed(!!res.data.overseasAllowed);
-        }
-      })
-      .catch(() => {});
+    Promise.all([
+      getAccounts()
+        .then((res) => { if (Array.isArray(res.data)) setAccounts(res.data); })
+        .catch(() => {}),
+      getCardDetails()
+        .then((res) => { if (Array.isArray(res.data)) setCards(res.data); })
+        .catch(() => {})
+    ]).finally(() => setLoading(false));
   }, []);
 
+  const activeCard = cards[activeCardIndex] || null;
+  const isCardFrozen = activeCard?.isFrozen || false;
+  const internetAllowed = activeCard?.internetAllowed !== false;
+  const overseasAllowed = !!activeCard?.overseasAllowed;
+
   const handleFreezeToggle = async (val) => {
-    setIsCardFrozen(val);
-    try {
-      await toggleCardFreeze(val);
-    } catch (e) {
-      // Local state fallback
+    if (!activeCard) return;
+    const updated = [...cards];
+    updated[activeCardIndex] = { ...activeCard, isFrozen: val };
+    setCards(updated);
+    try { await toggleCardFreeze(val); } catch (e) {
+      updated[activeCardIndex] = { ...activeCard, isFrozen: !val };
+      setCards(updated);
     }
   };
 
-  const handleSettingToggle = async (key, val, setter) => {
-    setter(val);
-    try {
-      await toggleCardSetting(key, val);
-    } catch (e) {
-      // Local state fallback
+  const handleSettingToggle = async (key, val) => {
+    if (!activeCard) return;
+    const updated = [...cards];
+    updated[activeCardIndex] = { ...activeCard, [key]: val };
+    setCards(updated);
+    try { await toggleCardSetting(key, val); } catch (e) {
+      updated[activeCardIndex] = { ...activeCard, [key]: !val };
+      setCards(updated);
     }
   };
 
@@ -72,39 +68,49 @@ const AccountsScreen = () => {
       <Text style={globalStyles.subtitle}>Sanal kart izinlerinizi yönetin ve bakiyelerinizi izleyin.</Text>
 
       {/* Credit Card Interactive Visual */}
-      <View style={[styles.creditCard, isCardFrozen && styles.creditCardFrozen]}>
-        <View style={styles.cardHeader}>
-          <Text style={styles.cardBrand}>TokerBank</Text>
-          <Text style={styles.cardTag}>PLATINUM VIRTUAL</Text>
+      {loading ? (
+        <View style={[styles.creditCard, { alignItems: 'center', justifyContent: 'center' }]}>
+          <Text style={{ color: '#94a3b8' }}>Kart bilgileri yükleniyor...</Text>
         </View>
-
-        <Text style={styles.cardChip}>💳</Text>
-
-        <Text style={styles.cardNumber}>
-          {showCardDetails ? '4543 8912 0012 8819' : '4543 •••• •••• 8819'}
-        </Text>
-
-        <View style={styles.cardFooter}>
-          <View>
-            <Text style={styles.cardLabel}>KART SAHİBİ</Text>
-            <Text style={styles.cardVal}>BORA TOKER</Text>
-          </View>
-          <View>
-            <Text style={styles.cardLabel}>SON KULLANMA</Text>
-            <Text style={styles.cardVal}>{showCardDetails ? '09/29' : '••/••'}</Text>
-          </View>
-          <View>
-            <Text style={styles.cardLabel}>CVV</Text>
-            <Text style={styles.cardVal}>{showCardDetails ? '492' : '•••'}</Text>
-          </View>
+      ) : cards.length === 0 ? (
+        <View style={[styles.creditCard, { alignItems: 'center', justifyContent: 'center' }]}>
+          <Text style={{ color: '#94a3b8' }}>Kayıtlı kart bulunmamaktadır.</Text>
         </View>
-
-        {isCardFrozen && (
-          <View style={styles.frozenOverlay}>
-            <Text style={styles.frozenText}>🔒 KART DONDURULDU</Text>
+      ) : (
+        <View style={[styles.creditCard, isCardFrozen && styles.creditCardFrozen]}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardBrand}>TokerBank</Text>
+            <Text style={styles.cardTag}>{activeCard?.type?.replace(/_/g, ' ') || 'KART'}</Text>
           </View>
-        )}
-      </View>
+
+          <Text style={styles.cardChip}>💳</Text>
+
+          <Text style={styles.cardNumber}>
+            {activeCard?.cardNumber || '•••• •••• •••• ••••'}
+          </Text>
+
+          <View style={styles.cardFooter}>
+            <View>
+              <Text style={styles.cardLabel}>KART SAHİBİ</Text>
+              <Text style={styles.cardVal}>{activeCard?.holder || '—'}</Text>
+            </View>
+            <View>
+              <Text style={styles.cardLabel}>SON KULLANMA</Text>
+              <Text style={styles.cardVal}>{showCardDetails ? (activeCard?.expiry || '—') : '••/••'}</Text>
+            </View>
+            <View>
+              <Text style={styles.cardLabel}>CVV</Text>
+              <Text style={styles.cardVal}>•••</Text>
+            </View>
+          </View>
+
+          {isCardFrozen && (
+            <View style={styles.frozenOverlay}>
+              <Text style={styles.frozenText}>🔒 KART DONDURULDU</Text>
+            </View>
+          )}
+        </View>
+      )}
 
       {/* Card Controls Panel */}
       <View style={globalStyles.card}>
@@ -130,6 +136,7 @@ const AccountsScreen = () => {
           </View>
           <Switch
             value={isCardFrozen}
+            disabled={!activeCard}
             onValueChange={handleFreezeToggle}
             trackColor={{ false: '#334155', true: colors.danger }}
             thumbColor="#FFF"
@@ -143,8 +150,8 @@ const AccountsScreen = () => {
           </View>
           <Switch
             value={internetAllowed}
-            disabled={isCardFrozen}
-            onValueChange={(val) => handleSettingToggle('internetAllowed', val, setInternetAllowed)}
+            disabled={isCardFrozen || !activeCard}
+            onValueChange={(val) => handleSettingToggle('internetAllowed', val)}
             trackColor={{ false: '#334155', true: colors.primary }}
             thumbColor="#FFF"
           />
@@ -157,8 +164,8 @@ const AccountsScreen = () => {
           </View>
           <Switch
             value={overseasAllowed}
-            disabled={isCardFrozen}
-            onValueChange={(val) => handleSettingToggle('overseasAllowed', val, setOverseasAllowed)}
+            disabled={isCardFrozen || !activeCard}
+            onValueChange={(val) => handleSettingToggle('overseasAllowed', val)}
             trackColor={{ false: '#334155', true: colors.primary }}
             thumbColor="#FFF"
           />

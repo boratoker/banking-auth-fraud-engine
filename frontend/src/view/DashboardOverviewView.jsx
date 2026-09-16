@@ -6,7 +6,6 @@ import { RiskBadge } from '../utils/riskUtils';
 const DashboardOverviewView = ({ userName, onNavigate }) => {
   const [showBalances, setShowBalances] = useState(true);
   const [overview, setOverview] = useState({
-
     recentTransactions: []
   });
 
@@ -22,13 +21,22 @@ const DashboardOverviewView = ({ userName, onNavigate }) => {
     return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(val || 0);
   };
 
+  const creditCardPct = overview.creditCardLimit && overview.creditCardSpent
+    ? Math.min(100, Math.round((overview.creditCardSpent / overview.creditCardLimit) * 100))
+    : 0;
+
   return (
     <div className="view-container overview-view">
       {/* Welcome Banner */}
       <div className="welcome-banner">
         <div className="welcome-text">
           <h1>Hoş geldin, {userName || 'Değerli Müşterimiz'} 👋</h1>
-          <p>Hesap durumunuz ve güvenlik özetiniz günceldir. Son oturum: İstanbul, Türkiye (Bu Cihaz)</p>
+          <p>
+            Hesap durumunuz ve güvenlik özetiniz günceldir.
+            {overview.lastSessionLocation && (
+              <> Son oturum: <strong>{overview.lastSessionLocation}</strong> ({overview.lastSessionDevice || 'Bu Cihaz'})</>
+            )}
+          </p>
         </div>
         <button
           className="toggle-balance-btn"
@@ -49,37 +57,58 @@ const DashboardOverviewView = ({ userName, onNavigate }) => {
             {showBalances ? formatCurrency(overview.totalBalance) : '•••••••• ₺'}
           </div>
           <div className="card-footer">
-            <span className="badge positive">+₺12,500.00 bu ay</span>
-            <span className="account-iban">TR32 0006 1000 0000 1234 5678 90</span>
+            {overview.monthlyIncome > 0 && (
+              <span className="badge positive">+{formatCurrency(overview.monthlyIncome)} bu ay</span>
+            )}
+            {overview.demandAccountIban && (
+              <span className="account-iban">{overview.demandAccountIban}</span>
+            )}
           </div>
         </div>
 
         <div className="metric-card">
           <div className="card-header">
             <span className="card-title">Birikim Hesabı (Vadeli)</span>
-            <span className="card-chip">%48.5 Faiz</span>
+            {overview.savingsInterestRate != null && (
+              <span className="card-chip">%{overview.savingsInterestRate} Faiz</span>
+            )}
           </div>
           <div className="card-value">
             {showBalances ? formatCurrency(overview.savingsBalance) : '•••••••• ₺'}
           </div>
           <div className="card-footer">
-            <span className="footer-meta">Vade Sonu: 18 Ekim 2026</span>
+            {overview.savingsMaturityDate ? (
+              <span className="footer-meta">Vade Sonu: {overview.savingsMaturityDate}</span>
+            ) : (
+              overview.savingsBalance === 0 && (
+                <span className="footer-meta">Vadeli hesap bulunmuyor</span>
+              )
+            )}
           </div>
         </div>
 
         <div className="metric-card">
           <div className="card-header">
-            <span className="card-title">Platinum Kredi Kartı</span>
-            <span className="card-chip">Limit: ₺100.000</span>
+            <span className="card-title">{overview.creditCardName || 'Kredi Kartı'}</span>
+            {overview.creditCardLimit > 0 && (
+              <span className="card-chip">Limit: {formatCurrency(overview.creditCardLimit)}</span>
+            )}
           </div>
           <div className="card-value">
             {showBalances ? formatCurrency(overview.creditCardSpent) : '•••••••• ₺'}
           </div>
           <div className="card-footer">
-            <div className="progress-bar-container">
-              <div className="progress-bar-fill" style={{ width: '28%' }}></div>
-            </div>
-            <span className="footer-meta">Kullanılabilir Limit: ₺{(overview.creditCardLimit - overview.creditCardSpent).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</span>
+            {overview.creditCardLimit > 0 && (
+              <>
+                <div className="progress-bar-container">
+                  <div className="progress-bar-fill" style={{ width: `${creditCardPct}%` }}></div>
+                </div>
+                <span className="footer-meta">
+                  Kullanılabilir Limit: {formatCurrency(overview.creditCardLimit - (overview.creditCardSpent || 0))}
+                </span>
+              </>
+            )}
+            {!overview.creditCardLimit && <span className="footer-meta">Kredi kartı bulunmuyor</span>}
           </div>
         </div>
       </div>
@@ -99,7 +128,7 @@ const DashboardOverviewView = ({ userName, onNavigate }) => {
           <div className="fraud-widget-content">
             <div className="score-ring-container">
               <div className="score-ring">
-                <span className="score-number">{overview.riskScore || 98}</span>
+                <span className="score-number">{overview.riskScore || '—'}</span>
                 <span className="score-max">/100</span>
               </div>
               <div className="score-info">
@@ -109,18 +138,30 @@ const DashboardOverviewView = ({ userName, onNavigate }) => {
             </div>
 
             <div className="security-checks-list">
-              <div className="check-item verified">
-                <span className="check-icon">✓</span>
-                <span className="check-text">Cihaz Parmak İzi: Tanımlı macOS (MacBook Pro)</span>
-              </div>
-              <div className="check-item verified">
-                <span className="check-icon">✓</span>
-                <span className="check-text">Konum Analizi: İstanbul, TR (Olağan Konum)</span>
-              </div>
-              <div className="check-item verified">
-                <span className="check-icon">✓</span>
-                <span className="check-text">Behavioral Biometrics: İki Faktörlü OTP Doğrulandı</span>
-              </div>
+              {overview.lastSessionLocation && (
+                <div className="check-item verified">
+                  <span className="check-icon">✓</span>
+                  <span className="check-text">Konum Analizi: {overview.lastSessionLocation} (Tanımlı Konum)</span>
+                </div>
+              )}
+              {overview.lastSessionDevice && (
+                <div className="check-item verified">
+                  <span className="check-icon">✓</span>
+                  <span className="check-text">Cihaz: {overview.lastSessionDevice}</span>
+                </div>
+              )}
+              {overview.lastSessionIp && (
+                <div className="check-item verified">
+                  <span className="check-icon">✓</span>
+                  <span className="check-text">IP: {overview.lastSessionIp} — Behavioral Biometrics: OTP Doğrulandı</span>
+                </div>
+              )}
+              {!overview.lastSessionLocation && (
+                <div className="check-item verified">
+                  <span className="check-icon">✓</span>
+                  <span className="check-text">Behavioral Biometrics: İki Faktörlü OTP Doğrulandı</span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -182,6 +223,13 @@ const DashboardOverviewView = ({ userName, onNavigate }) => {
               </tr>
             </thead>
             <tbody>
+              {overview.recentTransactions.length === 0 && (
+                <tr>
+                  <td colSpan={5} style={{ textAlign: 'center', color: '#64748b', padding: '24px' }}>
+                    Henüz işlem bulunmuyor.
+                  </td>
+                </tr>
+              )}
               {overview.recentTransactions.map((tx) => (
                 <tr key={tx.id}>
                   <td>
