@@ -1,0 +1,84 @@
+@startuml Fraud_ML_Sequence
+title TokerBank AI Fraud Shield - Çıkarım (Inference) Akışı
+
+skinparam maxMessageSize 150
+skinparam backgroundColor #FFFFFF
+skinparam sequence {
+    ArrowColor #2C3E50
+    LifeLineBorderColor #34495E
+    LifeLineBackgroundColor #ECF0F1
+    ParticipantBorderColor #2980B9
+    ParticipantBackgroundColor #3498DB
+    ParticipantFontColor #FFFFFF
+    ParticipantFontSize 14
+    ParticipantFontName Arial
+}
+
+actor "Kullanıcı" as User
+participant "BankingController\n(API Gateway üzerinden)" as Controller
+participant "BankingService" as Service
+participant "MlFraudInferenceEngine" as MLEngine
+participant "FeatureEngineeringService" as FeatureEng
+participant "ONNX Runtime\n(XGBoost Model)" as ONNX
+database "PostgreSQL\n(Fraud Tables)" as DB
+participant "Kafka\n(fraud-alerts)" as Kafka
+
+User -> Controller: POST /transfers (Tutar, IBAN, Cihaz ID, IP)
+activate Controller
+
+Controller -> Service: processTransfer(request)
+activate Service
+
+Service -> MLEngine: evaluate(user, tx_details)
+activate MLEngine
+
+MLEngine -> FeatureEng: computeFeatures(...)
+activate FeatureEng
+FeatureEng --> MLEngine: Map<String, Object> (18 Kriter Vektörü)
+deactivate FeatureEng
+
+MLEngine -> MLEngine: double[]'a çevir & Input Tensor oluştur
+
+alt ONNX Model Yüklüyse
+    MLEngine -> ONNX: session.run(tensor)
+    activate ONNX
+    ONNX --> MLEngine: fraudProb (Örn: 0.85)
+    deactivate ONNX
+    MLEngine -> MLEngine: ML Skoru (fraudProb * 100) = 85.0
+else Model Yoksa / Hata Varsa (Fallback)
+    MLEngine -> MLEngine: ML Skoru = 0 (Atlanır)
+end
+
+MLEngine -> MLEngine: computeRuleBasedScore(features) -> Kural Skoru (Örn: 45)
+MLEngine -> MLEngine: Hibrit Skor = (ML * 0.7) + (Kural * 0.3) = 73.0
+
+MLEngine -> MLEngine: determineRiskLevel() -> "HIGH"
+MLEngine -> MLEngine: determineDecision() -> "PUSH_CHALLENGED"
+MLEngine -> MLEngine: computeShapExplanations() -> SHAP JSON (Nedenleri)
+
+MLEngine -> DB: save(FraudFeatureStore) (18 Kriterin Anlık Görüntüsü)
+MLEngine -> DB: save(FraudEvaluation) (Risk Skoru, Karar, SHAP, Latency)
+
+MLEngine --> Service: FraudEvaluation Sonucu
+deactivate MLEngine
+
+alt Karar == "COMPLETED" (0-30 Puan)
+    Service -> DB: save(Transaction - APPROVED)
+    Service -> Kafka: event(TRANSFER_COMPLETED)
+    Service --> Controller: Başarılı Yanıt (200 OK)
+    Controller --> User: Transfer Gerçekleşti
+else Karar == "PUSH_CHALLENGED" (31-84 Puan)
+    Service -> DB: save(Transaction - PENDING_OTP/PUSH)
+    Service -> Kafka: event(TRANSFER_PENDING)
+    Service --> Controller: Beklemede (202 Accepted - Push Gerekli)
+    Controller --> User: Mobil Onay Ekranına Yönlendir!
+else Karar == "CRITICAL_PUSH_CHALLENGED" (85-100 Puan)
+    Service -> DB: save(Transaction - PENDING_CRITICAL)
+    Service -> Kafka: event(FRAUD_ALERT_CRITICAL)
+    Service --> Controller: Beklemede (202 Accepted - OTP + Push Gerekli)
+    Controller --> User: OTP ve Push Doğrulaması İste!
+end
+
+deactivate Service
+deactivate Controller
+@enduml

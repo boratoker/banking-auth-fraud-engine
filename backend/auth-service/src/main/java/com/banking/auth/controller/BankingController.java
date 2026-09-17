@@ -315,10 +315,25 @@ public class BankingController {
 
         log.info("🚀 Transfer isteği: Amount={}, Recipient={}", amount, recipientName);
 
-        // Demo ortamı için rastgele bir kaynak hesabı al (TR vadesiz)
-        Account sourceAccount = bankingService.getUserAccounts(getDemoUserId()).stream()
-            .filter(a -> "TRY".equals(a.getCurrency()) && "DEMAND".equals(a.getAccountType()))
-            .findFirst().orElseThrow();
+        // Demo ortamı için varsayılan veya seçilen hesabı al
+        String selectedAccountIdStr = transferReq.get("selectedAccount") != null ? transferReq.get("selectedAccount").toString() : null;
+        Account sourceAccount;
+        if (selectedAccountIdStr != null && !selectedAccountIdStr.isEmpty() && !selectedAccountIdStr.startsWith("TR")) {
+            try {
+                UUID accId = UUID.fromString(selectedAccountIdStr);
+                sourceAccount = accountRepository.findById(accId)
+                    .filter(a -> a.getUser().getId().equals(getDemoUserId()))
+                    .orElseThrow(() -> new IllegalArgumentException("Seçilen hesap bulunamadı veya yetkiniz yok."));
+            } catch (Exception e) {
+                sourceAccount = bankingService.getUserAccounts(getDemoUserId()).stream()
+                    .filter(a -> "TRY".equals(a.getCurrency()) && "DEMAND".equals(a.getAccountType()))
+                    .findFirst().orElseThrow();
+            }
+        } else {
+            sourceAccount = bankingService.getUserAccounts(getDemoUserId()).stream()
+                .filter(a -> "TRY".equals(a.getCurrency()) && "DEMAND".equals(a.getAccountType()))
+                .findFirst().orElseThrow();
+        }
 
         // Client info (Gerçek uygulamada header/token üzerinden gelir)
         String ipAddress = (String) transferReq.getOrDefault("ipAddress", "127.0.0.1"); 
@@ -329,7 +344,10 @@ public class BankingController {
             log.info("✍️ İşlem kriptografik imzası alındı, doğrulanıyor...");
             try {
                 org.springframework.web.client.RestTemplate restTemplate = new org.springframework.web.client.RestTemplate();
-                String payloadStr = "{\"recipientIban\":\"" + recipientIban + "\",\"recipientName\":\"" + recipientName + "\",\"amount\":" + amountDouble + ",\"description\":\"" + description + "\"}";
+                
+                // JS ile birebir eşleşmesi için basit string formatı (Ondalık formatlamasından kaynaklı hash bozulmasını önlemek için amount string olarak alınır)
+                String amountStr = transferReq.get("amount").toString();
+                String payloadStr = "IBAN:" + recipientIban + ",AMOUNT:" + amountStr + ",DESC:" + description;
                 
                 Map<String, String> reqBody = new HashMap<>();
                 reqBody.put("userId", getDemoUserId().toString());
@@ -344,6 +362,8 @@ public class BankingController {
                 }
             } catch (Exception e) {
                 log.warn("⚠️ Kriptografik imza doğrulama hatası (Servis kapalı olabilir): {}", e.getMessage());
+                // Güvenlik gereği imza doğrulanamazsa işlemi blokla
+                return ResponseEntity.badRequest().body(Map.of("error", "Kriptografik imza servisi yanıt vermiyor. İşlem reddedildi."));
             }
         }
 

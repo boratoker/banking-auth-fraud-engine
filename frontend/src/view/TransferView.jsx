@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { submitTransfer, verifyTransferOtp, getContacts, getTransferStatus } from '../api/bankingApi';
+import { submitTransfer, verifyTransferOtp, getContacts, getTransferStatus, getAccounts } from '../api/bankingApi';
 import tokerbankLogo from '../assets/tokerbank-logo.png';
 import { RiskBadge } from '../utils/riskUtils';
+import { hasEnrolledKey, signPayload } from '../utils/CryptoService';
 
 const TransferView = ({ initialRecipient = '', initialIban = '' }) => {
   const [recipientIban, setRecipientIban] = useState(initialIban || '');
@@ -14,6 +15,19 @@ const TransferView = ({ initialRecipient = '', initialIban = '' }) => {
     if (initialIban) setRecipientIban(initialIban);
     if (initialRecipient) setRecipientName(initialRecipient);
   }, [initialRecipient, initialIban]);
+
+  const [myAccounts, setMyAccounts] = useState([]);
+
+  useEffect(() => {
+    getAccounts()
+      .then(res => {
+        if (Array.isArray(res.data) && res.data.length > 0) {
+          setMyAccounts(res.data);
+          setSelectedAccount(res.data[0].id);
+        }
+      })
+      .catch(err => console.error('Failed to fetch accounts', err));
+  }, []);
 
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
@@ -82,12 +96,29 @@ const TransferView = ({ initialRecipient = '', initialIban = '' }) => {
     const numericAmount = parseFloat(amount);
 
     try {
+      let signature = null;
+      
+      // Kriptografik İmza (Transaction Signing) Akışı
+      if (hasEnrolledKey()) {
+        const rawPayload = `IBAN:${recipientIban},AMOUNT:${numericAmount},DESC:${description}`;
+        const signRes = await signPayload(rawPayload);
+        if (signRes.success) {
+          signature = signRes.signature;
+          console.log("İşlem WebCrypto ile imzalandı!");
+        } else {
+          setErrorMsg("İmzalama hatası: " + signRes.error);
+          setLoading(false);
+          return;
+        }
+      }
+
       const res = await submitTransfer({
         selectedAccount,
         recipientIban,
         recipientName,
         amount: numericAmount,
-        description
+        description,
+        signature // Kriptografik imzayı (varsa) gönder
       });
 
       setLoading(false);
@@ -264,12 +295,22 @@ const TransferView = ({ initialRecipient = '', initialIban = '' }) => {
                 value={selectedAccount}
                 onChange={(e) => setSelectedAccount(e.target.value)}
               >
-                <option value="TR320006100000001234567890">
-                  Ana Vadesiz TL Hesabı (Bakiye: ₺148,250.75)
-                </option>
-                <option value="TR320006100000009876543211">
-                  Büyüyen Vadeli Birikim (Bakiye: ₺85,000.00)
-                </option>
+                {myAccounts.length > 0 ? (
+                  myAccounts.map(acc => (
+                    <option key={acc.id} value={acc.id}>
+                      {acc.name} (Bakiye: ₺{acc.balance.toLocaleString('tr-TR')}) - {acc.iban}
+                    </option>
+                  ))
+                ) : (
+                  <>
+                    <option value="TR320006100000001234567890">
+                      Ana Vadesiz TL Hesabı (Bakiye: ₺148,250.75)
+                    </option>
+                    <option value="TR320006100000009876543211">
+                      Büyüyen Vadeli Birikim (Bakiye: ₺85,000.00)
+                    </option>
+                  </>
+                )}
               </select>
             </div>
 

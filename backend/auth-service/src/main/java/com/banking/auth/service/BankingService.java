@@ -236,6 +236,30 @@ public class BankingService {
         txn.setCompletedAt(java.time.LocalDateTime.now());
         transactionRepository.save(txn);
         
+        // Alıcı bizim bankamızdaysa parayı hesabına ekle ve gelir işlemi oluştur
+        accountRepository.findByIban(txn.getDestIban()).ifPresent(destAccount -> {
+            destAccount.setBalance(destAccount.getBalance().add(amountToSubtract));
+            accountRepository.save(destAccount);
+            
+            Transaction incomingTxn = new Transaction();
+            incomingTxn.setUser(destAccount.getUser());
+            incomingTxn.setSourceAccount(destAccount); // Alıcının hesabı üzerinden işlem
+            incomingTxn.setSourceIban(txn.getSourceIban());
+            incomingTxn.setDestIban(destAccount.getIban());
+            incomingTxn.setAmount(amountToSubtract); // Pozitif tutar (Gelir)
+            incomingTxn.setCurrency(destAccount.getCurrency());
+            incomingTxn.setTransferType("FAST");
+            incomingTxn.setCategory("Transfer");
+            incomingTxn.setDescription(txn.getUser().getFirstName() + " tarafından gönderildi: " + txn.getDescription());
+            incomingTxn.setStatus("COMPLETED");
+            incomingTxn.setCompletedAt(java.time.LocalDateTime.now());
+            incomingTxn.setRiskLevel("SAFE");
+            incomingTxn.setRiskScore(BigDecimal.ZERO);
+            
+            transactionRepository.save(incomingTxn);
+            log.info("💰 İç transfer: Alıcı hesaba (IBAN: {}) para yatırıldı.", destAccount.getIban());
+        });
+
         eventProducer.publishTransferCompleted(txn.getReferenceId(), amountToSubtract);
         log.info("💸 Transfer tamamlandı. Txn: {}, Tutar: {}", txn.getReferenceId(), amountToSubtract);
 
