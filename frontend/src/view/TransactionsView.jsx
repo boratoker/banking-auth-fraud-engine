@@ -19,7 +19,6 @@ const TransactionsView = ({ initialSearchTerm = '' }) => {
   const [transferIban, setTransferIban] = useState('');
   const [isEnrolled, setIsEnrolled] = useState(false);
   const [signingLog, setSigningLog] = useState([]);
-  const [isHackerMode, setIsHackerMode] = useState(false);
 
   useEffect(() => {
     setIsEnrolled(hasEnrolledKey());
@@ -99,17 +98,10 @@ const TransactionsView = ({ initialSearchTerm = '' }) => {
       const signature = signRes.signature;
       setSigningLog(prev => [...prev, `[İMZA] ${signature.substring(0, 40)}...`]);
 
-      // Hacker modu: Veriyi yolda değiştir
-      let payloadToSend = rawPayload;
-      if (isHackerMode) {
-        payloadToSend = `IBAN:${transferIban},AMOUNT:9999999`;
-        setSigningLog(prev => [...prev, `🚨 [HACKER] Veri yolda manipüle edildi: ${payloadToSend}`]);
-      }
-
       setSigningLog(prev => [...prev, `[SUNUCU] İmzalanan veri sunucuya doğrulanmak üzere gönderiliyor...`]);
       
       try {
-        const verifyRes = await verifySignature(user.id, payloadToSend, signature);
+        const verifyRes = await verifySignature(user.id, rawPayload, signature);
         setSigningLog(prev => [...prev, `✅ [BAŞARILI] ${verifyRes.data.message}`]);
       } catch (err) {
         const errMsg = err.response?.data?.error || err.message;
@@ -157,10 +149,7 @@ const TransactionsView = ({ initialSearchTerm = '' }) => {
               <label>Tutar (₺)</label>
               <input type="number" className="form-input" placeholder="1000" value={transferAmount} onChange={e => setTransferAmount(e.target.value)} />
             </div>
-            <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '10px' }}>
-              <input type="checkbox" id="hackerMode" checked={isHackerMode} onChange={e => setIsHackerMode(e.target.checked)} />
-              <label htmlFor="hackerMode" style={{ color: 'red', fontWeight: 'bold', margin: 0 }}>🚨 Hacker Modu (Veriyi Yolda 9999999 ₺ Olarak Değiştir)</label>
-            </div>
+
 
             <button className="btn btn-primary" style={{width: '100%', marginTop: '1rem'}} onClick={handleSignTransaction}>
               İmzala ve Gönder
