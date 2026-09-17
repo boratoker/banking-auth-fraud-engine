@@ -1,0 +1,331 @@
+@startuml TokerBank_Architecture
+
+' ============================================================
+'  TokerBank Banking Auth & Fraud Engine — Topological Graph
+' ============================================================
+
+skinparam backgroundColor #FAFAFA
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 11
+skinparam shadowing false
+skinparam roundcorner 12
+skinparam linetype ortho
+skinparam nodesep 60
+skinparam ranksep 50
+
+skinparam package {
+  BackgroundColor<<client>> #E3F2FD
+  BorderColor<<client>> #1565C0
+  BackgroundColor<<gateway>> #FFF3E0
+  BorderColor<<gateway>> #E65100
+  BackgroundColor<<auth>> #E8F5E9
+  BorderColor<<auth>> #2E7D32
+  BackgroundColor<<signing>> #F3E5F5
+  BorderColor<<signing>> #6A1B9A
+  BackgroundColor<<fraud>> #FFF8E1
+  BorderColor<<fraud>> #F9A825
+  BackgroundColor<<infra>> #ECEFF1
+  BorderColor<<infra>> #546E7A
+}
+
+skinparam component {
+  BackgroundColor #FFFFFF
+  BorderColor #90A4AE
+  FontColor #212121
+}
+
+skinparam database {
+  BackgroundColor #FFFFFF
+  BorderColor #78909C
+}
+
+skinparam queue {
+  BackgroundColor #FFFFFF
+  BorderColor #78909C
+}
+
+' ===================== CLIENT LAYER =====================
+
+package "Client Layer" <<client>> {
+
+  package "Frontend\n(React 19 + Vite 8)" {
+    component [App.jsx\nAuth Flow] as FE_AUTH
+    component [MainDashboardView] as FE_DASH
+    component [DashboardOverviewView] as FE_OVERVIEW
+    component [AccountsView] as FE_ACCOUNTS
+    component [TransferView] as FE_TRANSFER
+    component [SecurityView] as FE_SECURITY
+    component [TransactionsView] as FE_TXN
+    component [GlobalSearch\n(Cmd+K)] as FE_SEARCH
+    component [authApi.js] as FE_AUTH_API
+    component [bankingApi.js] as FE_BANK_API
+    component [signingApi.js] as FE_SIGN_API
+    component [CryptoService.js\n(WebCrypto ECDSA)] as FE_CRYPTO
+    component [riskUtils.jsx] as FE_RISK
+    component [textUtils.js\n(TR normalize)] as FE_TEXT
+  }
+
+  package "Mobile\n(Expo 57 + React Native)" {
+    component [AuthScreen] as MOB_AUTH
+    component [DashboardOverviewScreen] as MOB_OVERVIEW
+    component [AccountsScreen] as MOB_ACCOUNTS
+    component [TransferScreen] as MOB_TRANSFER
+    component [TransactionsScreen] as MOB_TXN
+    component [SecurityScreen] as MOB_SECURITY
+    component [Push Banner\n(Vibration + Anim)] as MOB_PUSH
+    component [FraudModal] as MOB_FRAUD
+    component [BottomNav] as MOB_NAV
+    component [authApi.js] as MOB_AUTH_API
+    component [bankingApi.js] as MOB_BANK_API
+    component [CryptoService.js\n(Elliptic)] as MOB_CRYPTO
+    component [DeviceUtils.js] as MOB_DEVICE
+  }
+}
+
+' ===================== GATEWAY LAYER =====================
+
+package "API Gateway\n:8080" <<gateway>> {
+  component [Spring Cloud\nGateway] as GW
+  note right of GW
+    Route Rules:
+    /api/v1/auth/** -> :8081
+    /api/v1/banking/** -> :8081
+    /api/v1/signing/** -> :8083
+  end note
+}
+
+' ===================== AUTH SERVICE =====================
+
+package "Auth Service :8081\n(Spring Boot 3)" <<auth>> {
+
+  package "Controllers" {
+    component [AuthController\n/api/v1/auth] as AUTH_CTRL
+    component [BankingController\n/api/v1/banking] as BANK_CTRL
+  }
+
+  package "Services" {
+    component [BankingService\n(@Transactional)] as BANK_SVC
+    component [EmailService\n(SMTP + HTML)] as EMAIL_SVC
+  }
+
+  package "ML Fraud Engine" {
+    component [MlFraudInferenceEngine\n(ONNX Runtime)] as ML_ENGINE
+    component [FeatureEngineeringService\n(18 Features)] as FEAT_ENG
+    component [fraud_xgboost_v1.onnx] as ONNX_MODEL
+  }
+
+  package "Event Producers" {
+    component [AuthEventProducer] as AUTH_EVT
+    component [BankingEventProducer] as BANK_EVT
+    component [SecurityAuditConsumer] as AUDIT_SVC
+  }
+
+  package "JPA Repositories" {
+    component [UserRepository] as USER_REPO
+    component [AccountRepository\n(Pessimistic Lock)] as ACC_REPO
+    component [TransactionRepository\n(Custom JPQL)] as TXN_REPO
+    component [CardRepository] as CARD_REPO
+    component [SessionRepository] as SESS_REPO
+    component [FraudEvaluationRepo] as FRAUD_EVAL_REPO
+    component [FraudFeatureStoreRepo] as FEAT_STORE_REPO
+    component [FraudModelRepo] as MODEL_REPO
+    component [BeneficiaryRepo] as BENEF_REPO
+    component [SecuritySettingsRepo] as SEC_SET_REPO
+    component [AuditLogRepo] as AUDIT_REPO
+  }
+
+  package "Entities (10)" {
+    component [User] as E_USER
+    component [Account] as E_ACCOUNT
+    component [Card] as E_CARD
+    component [Transaction] as E_TXN
+    component [UserSession] as E_SESSION
+    component [FraudEvaluation] as E_FRAUD_EVAL
+    component [FraudFeatureStore] as E_FEAT_STORE
+    component [FraudModel] as E_FRAUD_MODEL
+    component [BeneficiaryContact] as E_BENEF
+    component [UserSecuritySettings] as E_SEC_SET
+    component [SecurityAuditLog] as E_AUDIT
+  }
+
+  package "DTOs" {
+    component [CheckEmailRequest] as DTO1
+    component [RegisterRequest] as DTO2
+    component [VerifyPasswordRequest] as DTO3
+    component [VerifyOtpRequest] as DTO4
+    component [ForgotPasswordResetRequest] as DTO5
+  }
+}
+
+' ===================== SIGNING SERVICE =====================
+
+package "Signing Service :8083\n(Spring Boot 3)" <<signing>> {
+  component [SigningController\n/api/v1/signing] as SIGN_CTRL
+  component [UserPublicKey\nEntity] as SIGN_KEY
+  component [ECDSA P-256\nSHA256withECDSA] as SIGN_VERIFY
+  component [UserPublicKeyRepo] as SIGN_REPO
+}
+
+' ===================== FRAUD SERVICE =====================
+
+package "Fraud Service\n(Python 3.13)" <<fraud>> {
+  component [train_model.py] as PY_TRAIN
+  component [XGBoost\n(300 est, depth=6)] as PY_XGB
+  component [Isolation Forest\n(200 est, 5% contam)] as PY_ISO
+  component [SHAP\nExplainability] as PY_SHAP
+  component [ONNX Export\n(onnxmltools)] as PY_ONNX
+  component [Sentetik Veri\n9500N + 500F] as PY_DATA
+}
+
+' ===================== INFRASTRUCTURE =====================
+
+package "Infrastructure\n(Docker Compose)" <<infra>> {
+  database "PostgreSQL\n:5432" as PG
+  database "Redis\n:6379" as REDIS
+  queue "Kafka\n:9092" as KAFKA
+  queue "Zookeeper\n:2181" as ZK
+  queue "RabbitMQ\n:5672" as RABBIT
+  component [Prometheus\n:9090] as PROM
+  component [Grafana\n:3001] as GRAFANA
+}
+
+' ===================== RELATIONSHIPS =====================
+
+' --- Frontend Internal ---
+FE_AUTH --> FE_AUTH_API
+FE_DASH --> FE_OVERVIEW
+FE_DASH --> FE_ACCOUNTS
+FE_DASH --> FE_TRANSFER
+FE_DASH --> FE_SECURITY
+FE_DASH --> FE_TXN
+FE_DASH --> FE_SEARCH
+FE_OVERVIEW --> FE_BANK_API
+FE_OVERVIEW --> FE_RISK
+FE_ACCOUNTS --> FE_BANK_API
+FE_TRANSFER --> FE_BANK_API
+FE_TRANSFER --> FE_RISK
+FE_SECURITY --> FE_BANK_API
+FE_TXN --> FE_BANK_API
+FE_TXN --> FE_SIGN_API
+FE_TXN --> FE_CRYPTO
+FE_TXN --> FE_RISK
+FE_TXN --> FE_TEXT
+FE_SEARCH --> FE_BANK_API
+FE_SEARCH --> FE_TEXT
+
+' --- Mobile Internal ---
+MOB_AUTH --> MOB_AUTH_API
+MOB_OVERVIEW --> MOB_BANK_API
+MOB_ACCOUNTS --> MOB_BANK_API
+MOB_TRANSFER --> MOB_BANK_API
+MOB_TRANSFER --> MOB_FRAUD
+MOB_TXN --> MOB_BANK_API
+MOB_SECURITY --> MOB_BANK_API
+MOB_PUSH --> MOB_BANK_API
+
+' --- Client to Gateway ---
+FE_AUTH_API ---> GW : "Vite Proxy\n/api -> :8080"
+FE_BANK_API ---> GW
+FE_SIGN_API ---> GW
+MOB_AUTH_API ---> GW : "HTTP"
+MOB_BANK_API ---> GW
+
+' --- Gateway to Services ---
+GW ---> AUTH_CTRL : "/api/v1/auth/**"
+GW ---> BANK_CTRL : "/api/v1/banking/**"
+GW ---> SIGN_CTRL : "/api/v1/signing/**"
+
+' --- Auth Controller Internal ---
+AUTH_CTRL --> EMAIL_SVC
+AUTH_CTRL --> AUTH_EVT
+AUTH_CTRL --> AUDIT_SVC
+AUTH_CTRL --> USER_REPO
+AUTH_CTRL --> SESS_REPO
+
+' --- Banking Controller Internal ---
+BANK_CTRL --> BANK_SVC
+BANK_CTRL --> USER_REPO
+BANK_CTRL --> ACC_REPO
+BANK_CTRL --> CARD_REPO
+BANK_CTRL --> TXN_REPO
+BANK_CTRL --> SESS_REPO
+BANK_CTRL --> BENEF_REPO
+BANK_CTRL --> SEC_SET_REPO
+BANK_CTRL --> AUDIT_REPO
+
+' --- Banking Service ---
+BANK_SVC --> ML_ENGINE
+BANK_SVC --> EMAIL_SVC
+BANK_SVC --> BANK_EVT
+BANK_SVC --> AUDIT_SVC
+BANK_SVC --> ACC_REPO
+BANK_SVC --> TXN_REPO
+
+' --- ML Fraud Engine ---
+ML_ENGINE --> FEAT_ENG
+ML_ENGINE --> ONNX_MODEL
+ML_ENGINE --> FRAUD_EVAL_REPO
+ML_ENGINE --> FEAT_STORE_REPO
+ML_ENGINE --> MODEL_REPO
+
+' --- Feature Engineering ---
+FEAT_ENG --> TXN_REPO
+FEAT_ENG --> BENEF_REPO
+FEAT_ENG --> SESS_REPO
+
+' --- Events ---
+AUTH_EVT --> KAFKA : "auth-events"
+BANK_EVT --> KAFKA : "banking-events\nfraud-alerts"
+AUDIT_SVC --> AUDIT_REPO
+
+' --- Signing Service ---
+SIGN_CTRL --> SIGN_VERIFY
+SIGN_CTRL --> SIGN_REPO
+SIGN_REPO --> SIGN_KEY
+
+' --- Fraud Service Python ---
+PY_TRAIN --> PY_DATA
+PY_TRAIN --> PY_XGB
+PY_TRAIN --> PY_ISO
+PY_TRAIN --> PY_SHAP
+PY_XGB --> PY_ONNX
+PY_ONNX --> ONNX_MODEL : "ONNX Artifact\nCopy to classpath"
+
+' --- Repositories to DB ---
+USER_REPO ---> PG
+ACC_REPO ---> PG
+TXN_REPO ---> PG
+CARD_REPO ---> PG
+SESS_REPO ---> PG
+FRAUD_EVAL_REPO ---> PG
+FEAT_STORE_REPO ---> PG
+MODEL_REPO ---> PG
+BENEF_REPO ---> PG
+SEC_SET_REPO ---> PG
+AUDIT_REPO ---> PG
+SIGN_REPO ---> PG
+
+' --- Redis ---
+AUTH_CTRL --> REDIS : "OTP Cache\notp:{email}\nTTL: 2min"
+
+' --- Kafka Infra ---
+KAFKA --> ZK
+
+' --- Monitoring ---
+PROM --> GRAFANA
+
+' ===================== LEGEND =====================
+
+legend bottom left
+  |= Renk |= Katman |
+  |<#E3F2FD> | Client (Frontend + Mobile) |
+  |<#FFF3E0> | API Gateway |
+  |<#E8F5E9> | Auth Service (Core Banking) |
+  |<#F3E5F5> | Signing Service |
+  |<#FFF8E1> | Fraud Service (Python ML) |
+  |<#ECEFF1> | Infrastructure |
+end legend
+
+footer TokerBank Enterprise Banking — Full Topological Architecture
+
+@enduml
