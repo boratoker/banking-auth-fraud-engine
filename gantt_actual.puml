@@ -1,0 +1,65 @@
+@startgantt TokerBank_Gantt
+
+' ============================================================
+'  TokerBank Proje Geliştirme Süreci (Gerçekleşen Akış)
+' ============================================================
+
+Project starts 2023-11-01
+hide footbox
+
+<style>
+ganttDiagram {
+  task {
+    BackgroundColor LightBlue
+    BorderColor DarkBlue
+    FontName Helvetica
+  }
+  milestone {
+    BackgroundColor DarkBlue
+    BorderColor Black
+  }
+}
+</style>
+
+' --- 1. Aşama: İstemci Arayüzleri ---
+[Mobile & Web Frontend Geliştirimi] lasts 14 days
+[Mobile & Web Frontend Geliştirimi] is colored in #E3F2FD
+
+' --- 2. Aşama: Temel Bankacılık ---
+[Core Banking API & Veritabanı] starts at [Mobile & Web Frontend Geliştirimi]'s end and lasts 10 days
+[Core Banking API & Veritabanı] is colored in #E8F5E9
+
+' --- 3. Aşama: İletişim ve Güvenlik - Bölüm 1 ---
+[Email OTP Entegrasyonu] starts at [Core Banking API & Veritabanı]'s end and lasts 4 days
+[Email OTP Entegrasyonu] is colored in #FFF3E0
+
+' --- 4. Aşama: Yapay Zeka ve Analiz ---
+[Fraud ML (Yapay Zeka) Eğitimi & ONNX] starts at [Email OTP Entegrasyonu]'s end and lasts 8 days
+[Fraud ML (Yapay Zeka) Eğitimi & ONNX] is colored in #FFF8E1
+
+' --- 5. Aşama: İleri Düzey Güvenlik Özellikleri ---
+[Cihaz ID ile Oturum (Session) Algılama] starts at [Fraud ML (Yapay Zeka) Eğitimi & ONNX]'s end and lasts 5 days
+[Cihaz ID ile Oturum (Session) Algılama] is colored in #F3E5F5
+
+[Transaction Signing (Kriptografik İmza)] starts at [Cihaz ID ile Oturum (Session) Algılama]'s end and lasts 4 days
+[Transaction Signing (Kriptografik İmza)] is colored in #F3E5F5
+
+' --- 6. Aşama: Ek İletişim ---
+[SMS OTP Entegrasyonu] starts at [Transaction Signing (Kriptografik İmza)]'s end and lasts 3 days
+[SMS OTP Entegrasyonu] is colored in #FFF3E0
+
+' --- 7. Aşama: Final & Test ---
+[End-to-End Test & Hata Giderme] starts at [SMS OTP Entegrasyonu]'s end and lasts 5 days
+[End-to-End Test & Hata Giderme] is colored in #ECEFF1
+
+[Sunum Hazırlığı & Canlıya Alım] starts at [End-to-End Test & Hata Giderme]'s end and lasts 2 days
+[Sunum Hazırlığı & Canlıya Alım] is colored in #ECEFF1
+
+' --- Milestones (Dönüm Noktaları) ---
+[Arayüzler Tamamlandı] happens at [Mobile & Web Frontend Geliştirimi]'s end
+[Temel Sistem Hazır] happens at [Email OTP Entegrasyonu]'s end
+[Yapay Zeka Koruması Aktif] happens at [Fraud ML (Yapay Zeka) Eğitimi & ONNX]'s end
+[Entegrasyon Tamamlandı] happens at [SMS OTP Entegrasyonu]'s end
+[Proje Canlıya Alındı] happens at [Sunum Hazırlığı & Canlıya Alım]'s end
+
+@endgantt
