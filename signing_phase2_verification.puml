@@ -1,5 +1,5 @@
-@startuml Transaction_Signing_Sequence
-title TokerBank Kriptografik İşlem İmzalama (ECDSA P-256)
+@startuml Signing_Phase2_Verification
+title Aşama 2: Kriptografik İşlem Doğrulama (Gerçek Transfer Akışı)
 
 skinparam maxMessageSize 150
 skinparam backgroundColor #FFFFFF
@@ -17,35 +17,12 @@ skinparam sequence {
 actor "Kullanıcı" as User
 participant "Frontend/Mobil\n(WebCrypto API)" as Client
 participant "API Gateway\n(:8080)" as Gateway
+participant "Banking Service\n(AuthSvc :8081)" as AuthSvc
 participant "Signing Service\n(:8083)" as SignSvc
-database "PostgreSQL\n(UserPublicKey)" as DB
+participant "ML Fraud Engine\n(:5001)" as MLEngine
+database "PostgreSQL" as DB
 
-== Aşama 1: Cihaz Kaydı (Device Enrollment) ==
-
-User -> Client: "Cihazımı Güvenilir Kaydet" Butonuna Tıklar
-activate Client
-
-Client -> Client: ECDSA P-256 KeyPair Üret\n(Public Key + Private Key)
-Client -> Client: Private Key'i Güvenli Alana Kaydet (Local/Keystore)
-Client -> Client: Public Key'i SPKI/PEM Formatına Çevir
-
-Client -> Gateway: POST /api/v1/signing/enroll\n(userId, publicKey, deviceName)
-activate Gateway
-Gateway -> SignSvc: İsteği Yönlendir
-activate SignSvc
-
-SignSvc -> DB: save(UserPublicKey)\n(Açık anahtarı veritabanına kaydet)
-SignSvc --> Gateway: 200 OK (Cihaz Kaydedildi)
-deactivate SignSvc
-Gateway --> Client: Başarılı Yanıt
-deactivate Gateway
-
-Client --> User: "Cihazınız Güvenle Kaydedildi"
-deactivate Client
-
-== Aşama 2: Kriptografik İşlem Doğrulama (Gerçek Transfer Akışı) ==
-
-User -> Client: Para Transferi Başlat ("Para Gönder" Butonu)
+User -> Client: Para Transferi Başlat\n("Para Gönder" Butonu)
 activate Client
 
 Client -> Client: Düz Metin Oluştur\n("IBAN:TR...,AMOUNT:1000,DESC:Kira")

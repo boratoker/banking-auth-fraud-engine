@@ -1,0 +1,43 @@
+@startuml Signing_Phase1_Enrollment
+title Aşama 1: Cihaz Kaydı (Device Enrollment)
+
+skinparam maxMessageSize 150
+skinparam backgroundColor #FFFFFF
+skinparam sequence {
+    ArrowColor #2C3E50
+    LifeLineBorderColor #34495E
+    LifeLineBackgroundColor #ECF0F1
+    ParticipantBorderColor #27AE60
+    ParticipantBackgroundColor #2ECC71
+    ParticipantFontColor #FFFFFF
+    ParticipantFontSize 14
+    ParticipantFontName Arial
+}
+
+actor "Kullanıcı" as User
+participant "Frontend/Mobil\n(WebCrypto API)" as Client
+participant "API Gateway\n(:8080)" as Gateway
+participant "Signing Service\n(:8083)" as SignSvc
+database "PostgreSQL\n(UserPublicKey)" as DB
+
+User -> Client: "Cihazımı Güvenilir Kaydet" Butonuna Tıklar
+activate Client
+
+Client -> Client: ECDSA P-256 KeyPair Üret\n(Public Key + Private Key)
+Client -> Client: Private Key'i Güvenli Alana Kaydet (Local/Keystore)
+Client -> Client: Public Key'i SPKI/PEM Formatına Çevir
+
+Client -> Gateway: POST /api/v1/signing/enroll\n(userId, publicKey, deviceName)
+activate Gateway
+Gateway -> SignSvc: İsteği Yönlendir
+activate SignSvc
+
+SignSvc -> DB: save(UserPublicKey)\n(Açık anahtarı veritabanına kaydet)
+SignSvc --> Gateway: 200 OK (Cihaz Kaydedildi)
+deactivate SignSvc
+Gateway --> Client: Başarılı Yanıt
+deactivate Gateway
+
+Client --> User: "Cihazınız Güvenle Kaydedildi"
+deactivate Client
+@enduml
