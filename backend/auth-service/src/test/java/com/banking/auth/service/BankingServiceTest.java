@@ -6,7 +6,9 @@ import com.banking.auth.model.Account;
 import com.banking.auth.model.FraudEvaluation;
 import com.banking.auth.model.Transaction;
 import com.banking.auth.model.User;
+import com.banking.auth.model.UserSecuritySettings;
 import com.banking.auth.repository.AccountRepository;
+import com.banking.auth.repository.SecuritySettingsRepository;
 import com.banking.auth.repository.TransactionRepository;
 import com.banking.auth.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -17,6 +19,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -39,10 +42,16 @@ class BankingServiceTest {
     private UserRepository userRepository;
 
     @Mock
+    private SecuritySettingsRepository securitySettingsRepository;
+
+    @Mock
     private BankingEventProducer eventProducer;
 
     @Mock
     private MlFraudInferenceEngine fraudEngine;
+
+    @Mock
+    private EmailService emailService;
 
     @InjectMocks
     private BankingService bankingService;
@@ -66,6 +75,13 @@ class BankingServiceTest {
         mockAccount.setUser(mockUser);
         mockAccount.setBalance(new BigDecimal("5000.00"));
         mockAccount.setCurrency("TRY");
+
+        UserSecuritySettings settings = new UserSecuritySettings();
+        settings.setUser(mockUser);
+        settings.setDailyTransferLimit(new BigDecimal("50000.00"));
+        settings.setDailySpentToday(BigDecimal.ZERO);
+        settings.setLastLimitResetDate(LocalDate.now());
+        lenient().when(securitySettingsRepository.findByUserId(any())).thenReturn(Optional.of(settings));
     }
 
     @Test
@@ -106,7 +122,7 @@ class BankingServiceTest {
         FraudEvaluation mockEval = new FraudEvaluation();
         mockEval.setRiskLevel("HIGH");
         mockEval.setRiskScore(75);
-        mockEval.setDecision("CHALLENGE_OTP");
+        mockEval.setDecision("PUSH_CHALLENGED");
         
         when(fraudEngine.evaluate(any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(mockEval);
@@ -117,7 +133,7 @@ class BankingServiceTest {
         Transaction result = bankingService.processTransfer(userId, accountId, "TR001", "Alıcı Adı", new BigDecimal("1000.00"), "Kira", "device1", "127.0.0.1");
 
         // Assert
-        assertEquals("OTP_CHALLENGED", result.getStatus());
+        assertEquals("PUSH_CHALLENGED", result.getStatus());
         assertEquals("HIGH", result.getRiskLevel());
         verify(accountRepository, never()).save(any()); // Bakiye düşmemeli
     }
@@ -145,5 +161,21 @@ class BankingServiceTest {
         assertEquals("COMPLETED", result.getStatus());
         assertEquals(new BigDecimal("4000.00"), mockAccount.getBalance()); // Bakiye düştü mü?
         verify(accountRepository, times(1)).save(mockAccount);
+    }
+
+    @Test
+    void testProcessTransfer_ExceedsDailyLimit_ThrowsException() {
+        // Arrange
+        mockAccount.setBalance(new BigDecimal("100000.00"));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(mockUser));
+        when(accountRepository.findByIdForUpdate(accountId)).thenReturn(Optional.of(mockAccount));
+
+        // Act & Assert
+        Exception exception = assertThrows(IllegalArgumentException.class, () -> {
+            bankingService.processTransfer(userId, accountId, "TR001", "Alıcı Adı", new BigDecimal("60000.00"), "Kira", "device1", "127.0.0.1");
+        });
+
+        assertTrue(exception.getMessage().contains("Günlük transfer limitinizi aşıyorsunuz"));
+        verify(transactionRepository, never()).save(any());
     }
 }

@@ -563,20 +563,79 @@ public class BankingController {
 
     // --- GET /api/v1/banking/security/sessions ---
     @GetMapping("/security/sessions")
-    public ResponseEntity<List<Map<String, Object>>> getSessions() {
+    public ResponseEntity<List<Map<String, Object>>> getSessions(
+            @RequestHeader(value = "X-Device-Fingerprint", required = false) String clientFp,
+            @RequestHeader(value = "X-Device-Type", required = false) String clientDeviceType,
+            @RequestHeader(value = "User-Agent", required = false) String userAgent) {
+        
+        // Cihaz tipini belirle
+        String detectedType = clientDeviceType;
+        if (detectedType == null) {
+            if (userAgent != null && (userAgent.contains("Mozilla") || userAgent.contains("Chrome") || userAgent.contains("Safari") || userAgent.contains("Macintosh") || userAgent.contains("Windows"))) {
+                detectedType = "WEB";
+            } else {
+                detectedType = "MOBILE";
+            }
+        }
+
         List<UserSession> sessions = sessionRepository.findByUserId(getDemoUserId());
-        sessions.sort((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt())); // En yeniler ilk sırada
+        sessions.sort((a, b) -> {
+            LocalDateTime t1 = a.getLastActiveAt() != null ? a.getLastActiveAt() : a.getCreatedAt();
+            LocalDateTime t2 = b.getLastActiveAt() != null ? b.getLastActiveAt() : b.getCreatedAt();
+            return t2.compareTo(t1); // En günceller en başta
+        });
+        
+        // 1. Adım: Hangi oturumun bu cihaza ait olduğunu tespit et
+        UUID currentSessionId = null;
+
+        // Öncelikle fingerprint ile birebir eşleşme ara
+        if (clientFp != null) {
+            for (UserSession s : sessions) {
+                if (s.isActive() && clientFp.equals(s.getDeviceFingerprint())) {
+                    currentSessionId = s.getId();
+                    break;
+                }
+            }
+        }
+
+        // Eğer fingerprint eşleşmediyse (örneğin önceki rastgele fp döneminden kalan oturum),
+        // aynı deviceType'a sahip (WEB ise WEB, MOBILE ise MOBILE) en güncel oturumu bul ve fingerprint'ini güncelle!
+        if (currentSessionId == null && detectedType != null) {
+            for (UserSession s : sessions) {
+                if (s.isActive() && detectedType.equalsIgnoreCase(s.getDeviceType())) {
+                    currentSessionId = s.getId();
+                    if (clientFp != null) {
+                        s.setDeviceFingerprint(clientFp);
+                        sessionRepository.save(s);
+                    }
+                    break;
+                }
+            }
+        }
+
         List<Map<String, Object>> res = new ArrayList<>();
-        Set<String> seenActiveDevices = new HashSet<>();
+        Set<String> seenDeviceKeys = new HashSet<>();
 
         for (UserSession s : sessions) {
-            if (s.isActive()) {
-                String fp = s.getDeviceFingerprint();
-                if (fp != null && seenActiveDevices.contains(fp)) {
-                    continue; // Sadece aynı cihazdan olan en güncel oturumu al
-                }
-                if (fp != null) seenActiveDevices.add(fp);
+            if (!s.isActive()) continue;
+            
+            // Cihazı tekilleştirmek için:
+            String deviceKey = s.getDeviceType();
+            if (s.getDeviceFingerprint() != null && !s.getDeviceFingerprint().startsWith("FP-WEB-")) {
+                deviceKey = s.getDeviceFingerprint();
+            } else {
+                deviceKey = s.getDeviceInfo() + "_" + s.getDeviceType();
             }
+            
+            if (seenDeviceKeys.contains(deviceKey)) {
+                // Eski kopyayı pasife çek ve listede gösterme
+                s.setActive(false);
+                sessionRepository.save(s);
+                continue;
+            }
+            seenDeviceKeys.add(deviceKey);
+
+            boolean isCurrent = (currentSessionId != null && s.getId().equals(currentSessionId));
             
             Map<String, Object> map = new HashMap<>();
             map.put("id", s.getId());
@@ -585,10 +644,21 @@ public class BankingController {
             map.put("ip", s.getIpAddress());
             map.put("location", s.getLocation());
             map.put("browser", s.getBrowser());
-            map.put("isCurrent", s.isActive()); // simplified
-            map.put("time", s.getCreatedAt().toString());
+            map.put("isCurrent", isCurrent);
+            LocalDateTime dt = s.getLastActiveAt() != null ? s.getLastActiveAt() : s.getCreatedAt();
+            map.put("time", dt.toString());
             res.add(map);
         }
+        
+        // "Bu Cihaz" olan oturumu listenin en tepesine al
+        res.sort((a, b) -> {
+            boolean aCur = Boolean.TRUE.equals(a.get("isCurrent"));
+            boolean bCur = Boolean.TRUE.equals(b.get("isCurrent"));
+            if (aCur && !bCur) return -1;
+            if (!aCur && bCur) return 1;
+            return 0;
+        });
+        
         return ResponseEntity.ok(res);
     }
 

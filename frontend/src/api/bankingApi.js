@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { getWebFingerprint } from './authApi';
 
 const API_BASE_URL = '/api/v1/banking';
 
@@ -43,7 +44,12 @@ export const getTransferStatus = async (transactionId) => {
 };
 
 export const getSecuritySessions = async () => {
-  return await axios.get(`${API_BASE_URL}/security/sessions`);
+  return await axios.get(`${API_BASE_URL}/security/sessions`, {
+    headers: {
+      'X-Device-Fingerprint': getWebFingerprint(),
+      'X-Device-Type': 'WEB'
+    }
+  });
 };
 
 export const terminateSession = async (id) => {

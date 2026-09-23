@@ -79,7 +79,15 @@ const TransactionsScreen = () => {
               <View style={{ flex: 1 }}>
                 <Text style={styles.txTitle}>{item.title}</Text>
                 <Text style={styles.txSub}>
-                  {item.date}
+                  {item.date && !isNaN(Date.parse(item.date))
+                    ? new Intl.DateTimeFormat('tr-TR', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      }).format(new Date(item.date))
+                    : item.date}
                 </Text>
               </View>
 

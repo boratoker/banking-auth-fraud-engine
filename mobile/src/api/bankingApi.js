@@ -65,7 +65,13 @@ export const verifyPushApproval = async (data) => {
 };
 
 export const getSecuritySessions = async () => {
-  return await apiClient.get(`${BANKING_PREFIX}/security/sessions`);
+  const fp = await getDeviceFingerprint();
+  return await apiClient.get(`${BANKING_PREFIX}/security/sessions`, {
+    headers: {
+      'X-Device-Fingerprint': fp,
+      'X-Device-Type': 'MOBILE'
+    }
+  });
 };
 
 export const terminateSession = async (id) => {

@@ -6,7 +6,9 @@ import com.banking.auth.model.Account;
 import com.banking.auth.model.FraudEvaluation;
 import com.banking.auth.model.Transaction;
 import com.banking.auth.model.User;
+import com.banking.auth.model.UserSecuritySettings;
 import com.banking.auth.repository.AccountRepository;
+import com.banking.auth.repository.SecuritySettingsRepository;
 import com.banking.auth.repository.TransactionRepository;
 import com.banking.auth.repository.UserRepository;
 import org.slf4j.Logger;
@@ -16,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -32,6 +35,7 @@ public class BankingService {
     private final AccountRepository accountRepository;
     private final TransactionRepository transactionRepository;
     private final UserRepository userRepository;
+    private final SecuritySettingsRepository securitySettingsRepository;
     private final BankingEventProducer eventProducer;
     private final MlFraudInferenceEngine fraudEngine;
     private final EmailService emailService;
@@ -44,12 +48,14 @@ public class BankingService {
     public BankingService(AccountRepository accountRepository,
                           TransactionRepository transactionRepository,
                           UserRepository userRepository,
+                          SecuritySettingsRepository securitySettingsRepository,
                           BankingEventProducer eventProducer,
                           MlFraudInferenceEngine fraudEngine,
                           EmailService emailService) {
         this.accountRepository = accountRepository;
         this.transactionRepository = transactionRepository;
         this.userRepository = userRepository;
+        this.securitySettingsRepository = securitySettingsRepository;
         this.eventProducer = eventProducer;
         this.fraudEngine = fraudEngine;
         this.emailService = emailService;
@@ -100,6 +106,29 @@ public class BankingService {
 
         if (sourceAccount.getBalance().compareTo(amount) < 0) {
             throw new IllegalArgumentException("Yetersiz bakiye.");
+        }
+
+        // Günlük transfer limiti kontrolü
+        UserSecuritySettings settings = securitySettingsRepository.findByUserId(userId).orElseGet(() -> {
+            UserSecuritySettings newSettings = new UserSecuritySettings();
+            newSettings.setUser(user);
+            return securitySettingsRepository.save(newSettings);
+        });
+
+        if (settings.getLastLimitResetDate() == null || settings.getLastLimitResetDate().isBefore(LocalDate.now())) {
+            settings.setDailySpentToday(BigDecimal.ZERO);
+            settings.setLastLimitResetDate(LocalDate.now());
+            securitySettingsRepository.save(settings);
+        }
+
+        BigDecimal totalDaily = settings.getDailySpentToday().add(amount);
+        if (totalDaily.compareTo(settings.getDailyTransferLimit()) > 0) {
+            BigDecimal remainingLimit = settings.getDailyTransferLimit().subtract(settings.getDailySpentToday()).max(BigDecimal.ZERO);
+            throw new IllegalArgumentException(String.format(
+                "Günlük transfer limitinizi aşıyorsunuz. Tanımlı limitiniz: %,.2f TL, Bugün kalan limitiniz: %,.2f TL. Lütfen Güvenlik Ayarlarından limitinizi yükseltin.",
+                settings.getDailyTransferLimit(),
+                remainingLimit
+            ));
         }
 
         // 1. İşlemi PENDING olarak kaydet
@@ -247,6 +276,16 @@ public class BankingService {
         txn.setStatus("COMPLETED");
         txn.setCompletedAt(java.time.LocalDateTime.now());
         transactionRepository.save(txn);
+        
+        // Günlük harcanan tutarı güncelle
+        securitySettingsRepository.findByUserId(txn.getUser().getId()).ifPresent(settings -> {
+            if (settings.getLastLimitResetDate() == null || settings.getLastLimitResetDate().isBefore(LocalDate.now())) {
+                settings.setDailySpentToday(BigDecimal.ZERO);
+                settings.setLastLimitResetDate(LocalDate.now());
+            }
+            settings.setDailySpentToday(settings.getDailySpentToday().add(amountToSubtract));
+            securitySettingsRepository.save(settings);
+        });
         
         // Alıcı bizim bankamızdaysa parayı hesabına ekle ve gelir işlemi oluştur
         accountRepository.findByIban(txn.getDestIban()).ifPresent(destAccount -> {

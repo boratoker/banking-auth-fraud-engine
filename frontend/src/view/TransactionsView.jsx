@@ -8,7 +8,6 @@ import { generateAndEnrollKeyPair, hasEnrolledKey, signPayload } from '../utils/
 
 const TransactionsView = ({ initialSearchTerm = '' }) => {
   const [searchTerm, setSearchTerm] = useState(initialSearchTerm || '');
-  const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [selectedRisk, setSelectedRisk] = useState('ALL');
 
   const [allTransactions, setAllTransactions] = useState([]);
@@ -48,12 +47,10 @@ const TransactionsView = ({ initialSearchTerm = '' }) => {
                           normalizeTurkish(tx.title).includes(q) || 
                           normalizeTurkish(tx.category).includes(q);
     
-    const matchesCategory = selectedCategory === 'ALL' || tx.category === selectedCategory;
-    
     const riskInfo = getRiskBadgeInfo(tx.risk, tx.riskScore);
     const matchesRisk = selectedRisk === 'ALL' || riskInfo.level === selectedRisk;
 
-    return matchesSearch && matchesCategory && matchesRisk;
+    return matchesSearch && matchesRisk;
   });
 
   const handleEnrollDevice = async () => {
@@ -203,26 +200,10 @@ const TransactionsView = ({ initialSearchTerm = '' }) => {
             <input 
               type="text" 
               className="form-input" 
-              placeholder="İşlem adı veya kategori ara..." 
+              placeholder="İşlem adı veya alıcı ara..." 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
-          </div>
-
-          <div className="filter-select-group">
-            <select 
-              className="form-input"
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-            >
-              <option value="ALL">Tüm Kategoriler</option>
-              <option value="Transfer">Transferler</option>
-              <option value="Alışveriş">Alışveriş</option>
-              <option value="Eğlence">Eğlence</option>
-              <option value="Ulaşım">Ulaşım</option>
-              <option value="Fatura">Fatura</option>
-              <option value="Gelir">Gelir</option>
-            </select>
           </div>
 
           <div className="filter-select-group">

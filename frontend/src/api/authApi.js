@@ -19,6 +19,15 @@ export const register = async (email, firstName, lastName, password) => {
     return await axios.post(`${API_BASE_URL}/register`, { email, firstName, lastName, password });
 };
 
+export const getWebFingerprint = () => {
+  let fp = localStorage.getItem('device_fingerprint');
+  if (!fp) {
+    fp = 'FP-WEB-' + Math.random().toString(36).substring(2, 10);
+    localStorage.setItem('device_fingerprint', fp);
+  }
+  return fp;
+};
+
 export const verifyOtp = async (email, otp, mode = 'login') => {
   let deviceInfo = 'Bilgisayar';
   if (navigator.userAgent.includes('Mac')) deviceInfo = 'Apple Mac';
@@ -27,7 +36,7 @@ export const verifyOtp = async (email, otp, mode = 'login') => {
   
   const browser = navigator.userAgent.substring(0, 50); // limit to 50 chars
   const deviceType = 'WEB';
-  const fingerprint = 'FP-WEB-' + Math.random().toString(36).substring(2, 10);
+  const fingerprint = getWebFingerprint();
   
   return await axios.post(`${API_BASE_URL}/verify-otp`, { 
     email, 

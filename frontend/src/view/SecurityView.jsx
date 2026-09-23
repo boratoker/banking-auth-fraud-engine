@@ -236,7 +236,12 @@ const SecurityView = () => {
                   </div>
                 </div>
                 <div className="session-time">
-                  {session.time}
+                  {session.time && !isNaN(Date.parse(session.time))
+                    ? new Intl.DateTimeFormat('tr-TR', {
+                        day: '2-digit', month: 'short', year: 'numeric',
+                        hour: '2-digit', minute: '2-digit'
+                      }).format(new Date(session.time))
+                    : session.time}
                 </div>
                 {!session.isCurrent && (
                   <button 
