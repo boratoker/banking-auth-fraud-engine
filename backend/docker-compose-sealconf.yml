@@ -1,0 +1,31 @@
+# ============================================
+# TokerBank Mini Sealconf - Docker Compose
+# Izole Kriptografik İmza Servisi
+# ============================================
+
+services:
+  mini-sealconf:
+    container_name: tokerbank-sealconf
+    build:
+      context: ./signing-service
+      dockerfile: Dockerfile
+    ports:
+      - "8083:8083"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://host.docker.internal:5432/banking_auth
+      - SPRING_DATASOURCE_USERNAME=banking
+      - SPRING_DATASOURCE_PASSWORD=Balkancan19*
+      - SPRING_DATASOURCE_DRIVER=org.postgresql.Driver
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    read_only: true
+    tmpfs:
+      - /tmp:size=64M
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8083/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
