@@ -148,16 +148,21 @@ const TransferView = ({ initialRecipient = '', initialIban = '' }) => {
       setLoading(false);
       
       if (err.response && err.response.status === 403) {
-        setErrorMsg(err.response.data.error || 'İşleminiz güvenlik nedeniyle bloke edildi.');
+        const msg = err.response.data.error || 'İşleminiz güvenlik nedeniyle bloke edildi.';
+        setErrorMsg(msg);
+        window.alert('Güvenlik Uyarısı: ' + msg);
         return;
       }
       
       if (err.response && err.response.status === 400) {
-        setErrorMsg(err.response.data.error || 'İşlem gerçekleştirilemedi.');
+        const msg = err.response.data.error || 'İşlem gerçekleştirilemedi.';
+        setErrorMsg(msg);
+        window.alert('İşlem Hatası: ' + msg);
         return;
       }
 
       setErrorMsg('Sunucu ile bağlantı kurulamadı. Lütfen tekrar deneyin.');
+      window.alert('Hata: Sunucu ile bağlantı kurulamadı. Lütfen tekrar deneyin.');
     }
   };
 

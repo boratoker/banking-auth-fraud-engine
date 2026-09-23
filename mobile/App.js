@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, Animated, TouchableOpacity, Image, DevSettings, Alert } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import AuthScreen from './src/screens/AuthScreen';
 import DashboardOverviewScreen from './src/screens/DashboardOverviewScreen';
@@ -10,8 +10,60 @@ import SecurityScreen from './src/screens/SecurityScreen';
 import Header from './src/components/Header';
 import BottomNav from './src/components/BottomNav';
 import { colors } from './src/theme/colors';
-import { StatusBar, Platform, Vibration, ActivityIndicator } from 'react-native';
-import { getPendingPushChallenges, verifyPushApproval, getPushNotifications } from './src/api/bankingApi';
+import { StatusBar, Platform, Vibration, ActivityIndicator, Modal } from 'react-native';
+import { getPendingPushChallenges, verifyPushApproval, getPushNotifications, addDevBalance } from './src/api/bankingApi';
+
+// Custom DEV Menu Overlay (Expo Go'da DevSettings bazen çalışmadığı için)
+const DevMenuOverlay = () => {
+  const [visible, setVisible] = useState(false);
+
+  if (!__DEV__) return null;
+
+  const handleAddBalance = (amount) => {
+    addDevBalance(amount)
+      .then(() => {
+        Alert.alert('Başarılı', `${amount.toLocaleString('tr-TR')} TL eklendi!`);
+        setVisible(false);
+      })
+      .catch(() => Alert.alert('Hata', 'Bakiye eklenemedi.'));
+  };
+
+  return (
+    <>
+      <TouchableOpacity 
+        style={{ position: 'absolute', bottom: 100, right: 20, backgroundColor: colors.primary, width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center', elevation: 5, zIndex: 999 }}
+        onPress={() => setVisible(true)}
+      >
+        <Text style={{ fontSize: 24 }}>🛠️</Text>
+      </TouchableOpacity>
+
+      <Modal visible={visible} transparent animationType="fade">
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{ backgroundColor: '#1E293B', padding: 20, borderRadius: 20, width: '80%', borderWidth: 1, borderColor: colors.primary }}>
+            <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold', marginBottom: 20, textAlign: 'center' }}>Geliştirici Araçları</Text>
+            
+            {[1000, 10000, 100000, 1000000].map(amt => (
+              <TouchableOpacity
+                key={amt}
+                style={{ backgroundColor: 'rgba(255, 145, 0, 0.1)', borderColor: colors.primary, borderWidth: 1, padding: 12, borderRadius: 8, marginBottom: 10, alignItems: 'center' }}
+                onPress={() => handleAddBalance(amt)}
+              >
+                <Text style={{ color: colors.primary, fontWeight: 'bold' }}>+ {amt.toLocaleString('tr-TR')} TL Bakiye Ekle</Text>
+              </TouchableOpacity>
+            ))}
+
+            <TouchableOpacity 
+              style={{ marginTop: 10, padding: 12, alignItems: 'center' }}
+              onPress={() => setVisible(false)}
+            >
+              <Text style={{ color: colors.textMuted }}>Kapat</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </>
+  );
+};
 
 // Başarısız giriş uyarı Toast bileşeni
 const FailedLoginToast = ({ info, onDismiss }) => {
@@ -307,6 +359,8 @@ export default function App() {
           alert={pendingAlert} 
           onDismiss={() => setPendingAlert(null)} 
         />
+        
+        <DevMenuOverlay />
       </SafeAreaView>
     </SafeAreaProvider>
   );

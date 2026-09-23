@@ -32,6 +32,10 @@ export const getPushNotifications = async () => {
   return await apiClient.get(`${BANKING_PREFIX}/notifications/push`);
 };
 
+export const addDevBalance = async (amount) => {
+  return await apiClient.post(`${BANKING_PREFIX}/dev/add-balance`, { amount });
+};
+
 export const submitTransfer = async (transferData) => {
   const payloadString = JSON.stringify(transferData);
   const signatureRes = await signPayload(payloadString);

@@ -76,7 +76,7 @@ class BankingServiceTest {
 
         // Act & Assert
         Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            bankingService.processTransfer(userId, accountId, "TR001", new BigDecimal("10000.00"), "Kira", "device1", "127.0.0.1");
+            bankingService.processTransfer(userId, accountId, "TR001", "Alıcı Adı", new BigDecimal("10000.00"), "Kira", "device1", "127.0.0.1");
         });
 
         assertEquals("Yetersiz bakiye.", exception.getMessage());
@@ -91,7 +91,7 @@ class BankingServiceTest {
 
         // Act & Assert
         Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            bankingService.processTransfer(userId, accountId, "TR001", new BigDecimal("-500.00"), "Kira", "device1", "127.0.0.1");
+            bankingService.processTransfer(userId, accountId, "TR001", "Alıcı Adı", new BigDecimal("-500.00"), "Kira", "device1", "127.0.0.1");
         });
 
         assertEquals("Transfer tutarı sıfırdan büyük olmalıdır.", exception.getMessage());
@@ -114,7 +114,7 @@ class BankingServiceTest {
         when(transactionRepository.save(any(Transaction.class))).thenAnswer(i -> i.getArguments()[0]);
 
         // Act
-        Transaction result = bankingService.processTransfer(userId, accountId, "TR001", new BigDecimal("1000.00"), "Kira", "device1", "127.0.0.1");
+        Transaction result = bankingService.processTransfer(userId, accountId, "TR001", "Alıcı Adı", new BigDecimal("1000.00"), "Kira", "device1", "127.0.0.1");
 
         // Assert
         assertEquals("OTP_CHALLENGED", result.getStatus());
@@ -139,7 +139,7 @@ class BankingServiceTest {
         when(transactionRepository.save(any(Transaction.class))).thenAnswer(i -> i.getArguments()[0]);
 
         // Act
-        Transaction result = bankingService.processTransfer(userId, accountId, "TR001", new BigDecimal("1000.00"), "Kira", "device1", "127.0.0.1");
+        Transaction result = bankingService.processTransfer(userId, accountId, "TR001", "Alıcı Adı", new BigDecimal("1000.00"), "Kira", "device1", "127.0.0.1");
 
         // Assert
         assertEquals("COMPLETED", result.getStatus());

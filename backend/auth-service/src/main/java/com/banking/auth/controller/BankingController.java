@@ -202,7 +202,18 @@ public class BankingController {
         for (Transaction tx : recentTxs) {
             Map<String, Object> t = new HashMap<>();
             t.put("id", tx.getId());
-            t.put("title", tx.getRecipientName() != null ? tx.getRecipientName() : tx.getDestIban());
+            
+            String title = tx.getRecipientName();
+            if (title == null || title.isBlank()) {
+                if (tx.getDescription() != null && !tx.getDescription().isBlank()) {
+                    title = tx.getDescription();
+                } else if ("Transfer".equals(tx.getCategory()) || "FAST".equals(tx.getTransferType())) {
+                    title = "Para Transferi";
+                } else {
+                    title = tx.getDestIban() != null ? tx.getDestIban() : "İşlem";
+                }
+            }
+            t.put("title", title);
             t.put("date", tx.getCreatedAt() != null ? tx.getCreatedAt().toString() : "");
             t.put("amount", tx.getAmount());
             t.put("category", tx.getCategory());
@@ -315,6 +326,9 @@ public class BankingController {
 
         log.info("🚀 Transfer isteği: Amount={}, Recipient={}", amount, recipientName);
 
+        if (recipientIban == null || recipientIban.trim().length() < 10 || recipientIban.trim().length() > 34) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Geçersiz IBAN formatı veya uzunluğu. Lütfen kontrol ediniz."));
+        }
         // Demo ortamı için varsayılan veya seçilen hesabı al
         String selectedAccountIdStr = transferReq.get("selectedAccount") != null ? transferReq.get("selectedAccount").toString() : null;
         Account sourceAccount;
@@ -370,7 +384,7 @@ public class BankingController {
         try {
             // ML Fraud Engine destekli transfer işlemi
             Transaction txn = bankingService.processTransfer(
-                getDemoUserId(), sourceAccount.getId(), recipientIban, amount, description, deviceFingerprint, ipAddress
+                getDemoUserId(), sourceAccount.getId(), recipientIban, recipientName, amount, description, deviceFingerprint, ipAddress
             );
 
             String status = txn.getStatus();
@@ -602,7 +616,18 @@ public class BankingController {
         for (Transaction tx : txs) {
             Map<String, Object> t = new HashMap<>();
             t.put("id", tx.getId());
-            t.put("title", tx.getRecipientName() != null ? tx.getRecipientName() : tx.getDestIban());
+            
+            String title = tx.getRecipientName();
+            if (title == null || title.isBlank()) {
+                if (tx.getDescription() != null && !tx.getDescription().isBlank()) {
+                    title = tx.getDescription();
+                } else if ("Transfer".equals(tx.getCategory()) || "FAST".equals(tx.getTransferType())) {
+                    title = "Para Transferi";
+                } else {
+                    title = tx.getDestIban() != null ? tx.getDestIban() : "İşlem";
+                }
+            }
+            t.put("title", title);
             t.put("date", tx.getCreatedAt().toString());
             t.put("amount", tx.getAmount());
             t.put("category", tx.getCategory());
@@ -771,5 +796,19 @@ public class BankingController {
         }
         
         return ResponseEntity.ok(Map.of("hasNotification", false));
+    }
+
+    // --- POST /api/v1/banking/dev/add-balance ---
+    @PostMapping("/dev/add-balance")
+    public ResponseEntity<Map<String, Object>> addDevBalance(@RequestBody Map<String, Object> req) {
+        Object amountObj = req.get("amount");
+        if (amountObj == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "amount is required"));
+        }
+        
+        BigDecimal amount = new BigDecimal(amountObj.toString());
+        bankingService.addDevBalance(getDemoUserId(), amount);
+        
+        return ResponseEntity.ok(Map.of("message", amount + " TL başarıyla eklendi."));
     }
 }

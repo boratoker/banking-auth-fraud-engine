@@ -160,6 +160,13 @@ public class MlFraudInferenceEngine {
             shapContributions = computeShapExplanations(features);
         }
 
+        // Custom Rule for Testing CRITICAL Workflow
+        BigDecimal balance = transaction.getSourceAccount().getBalance();
+        if (amount.compareTo(new BigDecimal("500000")) > 0 &&
+            amount.compareTo(balance.multiply(new BigDecimal("0.70"))) > 0) {
+            riskScore = 95.0; // Force CRITICAL risk score
+        }
+
         // 4. Çıkarım Süresi (ms)
         double latencyMs = (System.nanoTime() - startTime) / 1_000_000.0;
 

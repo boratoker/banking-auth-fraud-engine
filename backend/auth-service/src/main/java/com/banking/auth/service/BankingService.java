@@ -80,7 +80,7 @@ public class BankingService {
      * Para transferi başlatır ve ML fraud kontrolünden geçirir.
      */
     @Transactional
-    public Transaction processTransfer(UUID userId, UUID sourceAccountId, String destIban,
+    public Transaction processTransfer(UUID userId, UUID sourceAccountId, String destIban, String recipientName,
                                        BigDecimal amount, String description,
                                        String deviceFingerprint, String ipAddress) {
         
@@ -108,6 +108,7 @@ public class BankingService {
         txn.setSourceAccount(sourceAccount);
         txn.setSourceIban(sourceAccount.getIban());
         txn.setDestIban(destIban);
+        txn.setRecipientName(recipientName);
         txn.setAmount(amount.negate()); // Çıkış
         txn.setCurrency(sourceAccount.getCurrency());
         txn.setTransferType("FAST");
@@ -226,6 +227,17 @@ public class BankingService {
         return transactionRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
             .filter(t -> "PUSH_CHALLENGED".equals(t.getStatus()) || "CRITICAL_PUSH_CHALLENGED".equals(t.getStatus()))
             .toList();
+    }
+    
+    /**
+     * SADECE DEV: Hesap bakiyesini artırır.
+     */
+    @Transactional
+    public void addDevBalance(UUID userId, BigDecimal amount) {
+        Account sourceAccount = accountRepository.findByUserId(userId).stream().findFirst()
+            .orElseThrow(() -> new IllegalArgumentException("Hesap bulunamadı."));
+        sourceAccount.setBalance(sourceAccount.getBalance().add(amount));
+        accountRepository.save(sourceAccount);
     }
     
     private void executeTransfer(Transaction txn, Account sourceAccount, BigDecimal amountToSubtract) {

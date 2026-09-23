@@ -45,8 +45,8 @@ public class FraudEvaluation {
     @Column(name = "risk_level", nullable = false, length = 15)
     private String riskLevel;
 
-    /** APPROVE, CHALLENGE_OTP, BLOCK */
-    @Column(nullable = false, length = 20)
+    /** APPROVE, CHALLENGE_OTP, BLOCK, PUSH_CHALLENGED, CRITICAL_PUSH_CHALLENGED */
+    @Column(nullable = false, length = 30)
     private String decision;
 
     /** Isolation Forest anomali skoru (0.00 - 1.00) */

@@ -79,7 +79,7 @@ const TransactionsScreen = () => {
               <View style={{ flex: 1 }}>
                 <Text style={styles.txTitle}>{item.title}</Text>
                 <Text style={styles.txSub}>
-                  {item.category} • {item.date}
+                  {item.date}
                 </Text>
               </View>
 

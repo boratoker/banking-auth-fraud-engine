@@ -248,7 +248,6 @@ const TransactionsView = ({ initialSearchTerm = '' }) => {
             <thead>
               <tr>
                 <th>İşlem Detayı</th>
-                <th>Kategori</th>
                 <th>Tarih</th>
                 <th>AI Fraud Durumu</th>
                 <th>İşlem Statüsü</th>
@@ -265,8 +264,14 @@ const TransactionsView = ({ initialSearchTerm = '' }) => {
                         <span className="tx-title">{tx.title}</span>
                       </div>
                     </td>
-                    <td><span className="tx-category">{tx.category}</span></td>
-                    <td><span className="tx-date">{tx.date}</span></td>
+                    <td>
+                      <span className="tx-date">
+                        {tx.date ? new Intl.DateTimeFormat('tr-TR', {
+                          day: '2-digit', month: 'short', year: 'numeric',
+                          hour: '2-digit', minute: '2-digit'
+                        }).format(new Date(tx.date)) : ''}
+                      </span>
+                    </td>
                     <td>
                       <RiskBadge riskLevel={tx.risk} riskScore={tx.riskScore} />
                     </td>
@@ -285,7 +290,7 @@ const TransactionsView = ({ initialSearchTerm = '' }) => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan="6" className="no-records">
+                  <td colSpan="5" className="no-records">
                     Arama kriterlerinize uyan işlem bulunamadı.
                   </td>
                 </tr>

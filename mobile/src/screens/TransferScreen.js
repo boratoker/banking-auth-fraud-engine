@@ -110,20 +110,14 @@ const TransferScreen = () => {
       }
     } catch (err) {
       setLoading(false);
-      if (numericAmount >= 10000) {
-        setFraudModalData({
-          riskLevel: 'HIGH',
-          riskScore: 68,
-          reason: 'Yüksek tutarlı transfer (₺10,000+) ve daha önce işlem yapılmamış yeni IBAN.',
-          amount: numericAmount,
-          recipient: recipientName,
-          iban: recipientIban,
-          transactionId: null,
-        });
-        setShowFraudModal(true);
-      } else {
-        setSuccessMsg(`✅ ₺${numericAmount.toLocaleString('tr-TR')} tutarındaki FAST transferiniz onaylandı.`);
-        clearForm();
+      
+      const errorMessage = err.response?.data?.error || 'İşlem gerçekleştirilemedi.';
+      setErrorMsg(errorMessage);
+      Alert.alert('Hata', errorMessage);
+      
+      if (err.response && err.response.status === 403) {
+        // Bloke vb. durumlar
+        return;
       }
     }
   };

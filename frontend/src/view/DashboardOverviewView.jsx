@@ -216,7 +216,6 @@ const DashboardOverviewView = ({ userName, onNavigate }) => {
             <thead>
               <tr>
                 <th>İşlem Adı</th>
-                <th>Kategori</th>
                 <th>Tarih</th>
                 <th>Fraud Risk Analizi</th>
                 <th className="text-right">Tutar</th>
@@ -225,7 +224,7 @@ const DashboardOverviewView = ({ userName, onNavigate }) => {
             <tbody>
               {overview.recentTransactions.length === 0 && (
                 <tr>
-                  <td colSpan={5} style={{ textAlign: 'center', color: '#64748b', padding: '24px' }}>
+                  <td colSpan={4} style={{ textAlign: 'center', color: '#64748b', padding: '24px' }}>
                     Henüz işlem bulunmuyor.
                   </td>
                 </tr>
@@ -238,7 +237,6 @@ const DashboardOverviewView = ({ userName, onNavigate }) => {
                       <span className="tx-title">{tx.title}</span>
                     </div>
                   </td>
-                  <td><span className="tx-category">{tx.category}</span></td>
                   <td><span className="tx-date">{tx.date}</span></td>
                   <td>
                     <RiskBadge riskLevel={tx.risk} riskScore={tx.riskScore} />
