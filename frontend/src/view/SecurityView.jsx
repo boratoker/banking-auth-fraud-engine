@@ -64,9 +64,11 @@ const SecurityView = () => {
         setNewLimitInput('');
         setLimitStatusMsg("Limit başarıyla düşürüldü.");
       } else {
-        // Increase limit needs OTP
-        await requestLimitIncrease(val);
+        // Increase limit needs OTP (Asynchronous, don't block UI)
         setShowLimitOtpModal(true);
+        requestLimitIncrease(val).catch(e => {
+            console.error("Failed to send limit request OTP:", e);
+        });
       }
     } catch (e) {
       setLimitError("İşlem başarısız oldu.");
@@ -259,8 +261,8 @@ const SecurityView = () => {
 
       {/* OTP Modal for Limit Increase */}
       {showLimitOtpModal && (
-        <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '400px' }}>
+        <div className="modal-backdrop">
+          <div className="modal-card" style={{ maxWidth: '400px' }}>
             <h3 style={{ marginBottom: '10px', color: '#0f172a' }}>Limit Artırımı İçin Onay</h3>
             <p style={{ marginBottom: '20px', color: '#64748b', fontSize: '14px' }}>
               Güvenliğiniz için limit artırım taleplerinde doğrulama gereklidir. Lütfen e-postanıza gönderilen onay kodunu giriniz.

@@ -27,7 +27,30 @@ public class EmailService {
         sendOtpEmail(toEmail, otp, "login");
     }
 
+    @Autowired(required = false)
+    private org.springframework.amqp.rabbit.core.RabbitTemplate rabbitTemplate;
+
     public void sendOtpEmail(String toEmail, String otp, String mode) {
+        if (rabbitTemplate != null) {
+            String payload = toEmail + "|" + otp + "|" + mode;
+            rabbitTemplate.convertAndSend("email.otp.queue", payload);
+            log.info("📩 [Asenkron] E-posta görevi RabbitMQ kuyruğuna atıldı (email.otp.queue): {}", payload);
+        } else {
+            log.warn("⚠️ RabbitTemplate bulunamadı! E-posta senkron olarak gönderiliyor.");
+            sendOtpEmailInternal(toEmail, otp, mode);
+        }
+    }
+
+    @org.springframework.amqp.rabbit.annotation.RabbitListener(queuesToDeclare = @org.springframework.amqp.rabbit.annotation.Queue("email.otp.queue"))
+    public void consumeOtpEmailTask(String payload) {
+        String[] parts = payload.split("\\|");
+        if (parts.length >= 3) {
+            log.info("🚀 [RabbitMQ Tüketici] Kuyruktan Görev Alındı: E-Posta gönderiliyor...");
+            sendOtpEmailInternal(parts[0], parts[1], parts[2]);
+        }
+    }
+
+    private void sendOtpEmailInternal(String toEmail, String otp, String mode) {
         boolean isRegister = "register".equalsIgnoreCase(mode);
         boolean isResetPassword = "reset-password".equalsIgnoreCase(mode);
         boolean isLimitIncrease = "limit_increase".equalsIgnoreCase(mode);

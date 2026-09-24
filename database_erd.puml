@@ -1,0 +1,150 @@
+@startuml database_erd
+title TokerBank - Veritabanı İlişki Diyagramı (Temiz ERD)
+
+'======================================================
+' TEMEL AYARLAR
+'======================================================
+hide circle
+hide empty members
+skinparam shadowing false
+skinparam nodesep 70
+skinparam ranksep 70
+
+skinparam class {
+    BackgroundColor #FFFFFF
+    ArrowColor #2C3E50
+    BorderColor #34495E
+    HeaderBackgroundColor #ECF0F1
+    FontSize 13
+    AttributeFontSize 12
+}
+
+'======================================================
+' TABLOLAR (ENTITIES)
+'======================================================
+
+entity "UserSecuritySettings" as settings {
+    * id : UUID
+    --
+    * user_id : UUID <<FK>>
+    lastLimitResetDate : Date
+    updatedAt : Timestamp
+}
+
+entity "UserSession" as session {
+    * id : UUID
+    --
+    * user_id : UUID <<FK>>
+    sessionTokenHash : String
+    deviceFingerprint : String
+    ipAddress : String
+    expiresAt : Timestamp
+}
+
+entity "User" as user {
+    * id : UUID
+    --
+    * email : String <<UNIQUE>>
+    * passwordHash : String
+    firstName : String
+    lastName : String
+    createdAt : Timestamp
+}
+
+entity "SecurityAuditLog" as audit {
+    * id : UUID
+    --
+    user_id : UUID <<FK>>
+    eventType : String
+    ipAddress : String
+    details : String
+}
+
+entity "BeneficiaryContact" as contact {
+    * id : UUID
+    --
+    * user_id : UUID <<FK>>
+    name : String
+    iban : String
+}
+
+entity "Account" as account {
+    * id : UUID
+    --
+    * user_id : UUID <<FK>>
+    * accountNumber : String <<UNIQUE>>
+    * iban : String <<UNIQUE>>
+    currency : String
+    balance : BigDecimal
+}
+
+entity "Card" as card {
+    * id : UUID
+    --
+    * user_id : UUID <<FK>>
+    * account_id : UUID <<FK>>
+    cardNumberMasked : String
+    totalLimit : BigDecimal
+}
+
+entity "Transaction" as txn {
+    * id : UUID
+    --
+    * referenceId : String <<UNIQUE>>
+    * user_id : UUID <<FK>>
+    * source_account_id : UUID <<FK>>
+    destIban : String
+    amount : BigDecimal
+    status : String
+    riskScore : BigDecimal
+    riskLevel : String
+}
+
+entity "FraudFeatureStore" as features {
+    * id : UUID
+    --
+    * transaction_id : UUID <<FK>>
+    featureVector : JSON
+    snapshotTime : Timestamp
+}
+
+entity "FraudEvaluation" as fraud {
+    * id : UUID
+    --
+    * transaction_id : UUID <<FK>>
+    * user_id : UUID <<FK>>
+    model_id : UUID <<FK>>
+    riskScore : int
+    decision : String
+    triggeredRules : String
+}
+
+entity "FraudModel" as model {
+    * id : UUID
+    --
+    modelName : String
+    modelVersion : String
+    isActive : boolean
+}
+
+'======================================================
+' İLİŞKİLER
+'======================================================
+' Manuel yönlendirme ile çizgilerin kesişmesi tamamen engellenmiştir.
+
+settings |o-down-|| user
+session }o-right-|| user
+user ||-right-o{ audit
+user ||-right-o{ contact
+
+user ||-down-o{ account
+account ||-right-o{ card
+
+account ||-down-o{ txn
+user ||-down-o{ txn
+
+txn ||-down-|| fraud
+txn ||-right-|| features
+model ||-right-o{ fraud
+
+@enduml

@@ -1,0 +1,64 @@
+@startuml fraud_decision_tree
+title TokerBank - ML Fraud Engine Risk Karar Ağacı & Akış Şeması
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Helvetica", "Arial", sans-serif
+skinparam defaultFontSize 12
+skinparam ActivityBackgroundColor #F8FAFC
+skinparam ActivityBorderColor #475569
+skinparam ActivityDiamondBackgroundColor #FEF3C7
+skinparam ActivityDiamondBorderColor #B45309
+
+start
+
+:Transfer Talebi Alındı;
+:Bakiye ve Günlük Limit Kontrolü;
+
+partition "1. Feature Engineering" {
+    :18 Farklı Özellik (Feature) Hesaplanır
+    (Tutar, Hız, Cihaz, Konum, Saat vb.);
+    :Özelliklerin Snapshot'ı "FraudFeatureStore" tablosuna kaydedilir;
+}
+
+partition "2. Risk Skoru Hesaplama (Hibrit)" {
+    fork
+        :ONNX XGBoost Modeli (Yapay Zeka)
+        İstatistiksel Olasılık (%70 Ağırlık);
+    fork again
+        :Deterministik Kurallar (Rule-Based)
+        (Örn: Gece vakti, Yeni Cihaz, Yüksek Velocity)
+        Skor (%30 Ağırlık);
+    end fork
+    
+    :Hibrit Risk Skoru Belirlenir;
+}
+
+partition "3. Hard-Limit (Aşırı Tehdit) Kontrolü" {
+    if (Tutar > 500.000 TL \nVE Tutar > Bakiye %70 ?) then (Evet)
+        :Risk Skoru zorla **95 (CRITICAL)** yapılır;
+    else (Hayır)
+        :Risk Skoru aynen korunur;
+    endif
+}
+
+partition "4. Karar Politikası (Decision Policy)" {
+    if (Risk Skoru > 84 ?) then (Evet)
+        #FED7AA:Karar: **CRITICAL_PUSH_CHALLENGED**;
+        note right: 1. Aşama: Mobil Push Onayı\n2. Aşama: E-posta OTP Onayı
+    elseif (Risk Skoru > 55 \nVEYA Tutar >= 50.000 TL ?) then (Evet)
+        #DBEAFE:Karar: **PUSH_CHALLENGED**;
+        note right: Sadece Mobil Push Onayı
+    elseif (Risk Skoru > 30 ?) then (Evet)
+        #DBEAFE:Karar: **PUSH_CHALLENGED**;
+        note right: Sadece Mobil Push Onayı
+    else (Hayır)
+        #DCFCE7:Karar: **COMPLETED (SAFE)**;
+        note right: Doğrudan Bakiye Aktarımı
+    endif
+}
+
+:Karar ve Risk Skoru "FraudEvaluation" Tablosuna Kaydedilir;
+:İşlem Durumu (Status) Güncellenir;
+
+stop
+@enduml

@@ -285,7 +285,22 @@ const TransferView = ({ initialRecipient = '', initialIban = '' }) => {
         <p>IBAN veya Kolay Adres ile anında para gönderin. Tüm işlemler yapay zeka fraud motoru ile taranır.</p>
       </div>
 
-      {successMsg && <div className="alert-message success">{successMsg}</div>}
+      {successMsg && (
+        <div className="modal-backdrop">
+          <div className="modal-card success-modal" style={{ textAlign: 'center', maxWidth: '400px' }}>
+            <div style={{ marginBottom: '16px' }}>
+              <img src={tokerbankLogo} alt="TokerBank" style={{ width: '72px', height: '72px', objectFit: 'contain' }} />
+            </div>
+            <h3 style={{ color: '#10b981', marginBottom: '16px', fontSize: '24px' }}>Transfer Başarılı</h3>
+            <p style={{ color: '#64748b', marginBottom: '24px', lineHeight: '1.5', fontSize: '15px' }}>
+              {successMsg}
+            </p>
+            <button className="btn btn-primary" style={{ width: '100%' }} onClick={() => setSuccessMsg('')}>
+              Tamam
+            </button>
+          </div>
+        </div>
+      )}
       {errorMsg && <div className="alert-message error">{errorMsg}</div>}
 
       <div className="transfer-layout">

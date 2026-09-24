@@ -8,7 +8,6 @@ spring:
     name: auth-service
   autoconfigure:
     exclude:
-      - org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
       - org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
       - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
       - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
