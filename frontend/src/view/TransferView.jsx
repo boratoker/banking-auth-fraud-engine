@@ -53,7 +53,7 @@ const TransferView = ({ initialRecipient = '', initialIban = '' }) => {
   // Start polling for transaction status after push challenge
   const startPolling = (transactionId, isCritical) => {
     if (pollRef.current) clearInterval(pollRef.current);
-    
+
     pollRef.current = setInterval(async () => {
       try {
         const res = await getTransferStatus(transactionId);
@@ -97,7 +97,7 @@ const TransferView = ({ initialRecipient = '', initialIban = '' }) => {
 
     try {
       let signature = null;
-      
+
       // Kriptografik İmza (Transaction Signing) Akışı
       if (hasEnrolledKey()) {
         const rawPayload = `IBAN:${recipientIban},AMOUNT:${numericAmount},DESC:${description}`;
@@ -146,14 +146,14 @@ const TransferView = ({ initialRecipient = '', initialIban = '' }) => {
       }
     } catch (err) {
       setLoading(false);
-      
+
       if (err.response && err.response.status === 403) {
         const msg = err.response.data.error || 'İşleminiz güvenlik nedeniyle bloke edildi.';
         setErrorMsg(msg);
         window.alert('Güvenlik Uyarısı: ' + msg);
         return;
       }
-      
+
       if (err.response && err.response.status === 400) {
         const msg = err.response.data.error || 'İşlem gerçekleştirilemedi.';
         setErrorMsg(msg);
@@ -228,10 +228,10 @@ const TransferView = ({ initialRecipient = '', initialIban = '' }) => {
                 <span className="phone-pulse delay"></span>
               </div>
             </div>
-            
+
             <h2 className="push-title">Mobil Cihaz Onayı Bekleniyor</h2>
             <p className="push-subtitle">
-              {pushData.isCritical 
+              {pushData.isCritical
                 ? 'Kritik risk seviyesi! Önce mobil cihazınızdan onaylayın, ardından e-posta OTP doğrulaması istenecektir.'
                 : 'Lütfen telefonunuzdaki TokerBank uygulamasından işlemi onaylayın.'
               }
@@ -289,7 +289,7 @@ const TransferView = ({ initialRecipient = '', initialIban = '' }) => {
         <div className="modal-backdrop">
           <div className="modal-card success-modal" style={{ textAlign: 'center', maxWidth: '400px' }}>
             <div style={{ marginBottom: '16px' }}>
-              <img src={tokerbankLogo} alt="TokerBank" style={{ width: '72px', height: '72px', objectFit: 'contain' }} />
+              <span style={{ fontSize: '72px' }}>✅</span>
             </div>
             <h3 style={{ color: '#10b981', marginBottom: '16px', fontSize: '24px' }}>Transfer Başarılı</h3>
             <p style={{ color: '#64748b', marginBottom: '24px', lineHeight: '1.5', fontSize: '15px' }}>

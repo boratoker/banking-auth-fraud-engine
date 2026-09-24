@@ -1,12 +1,14 @@
 package com.banking.signing.dto;
 
+import java.util.UUID;
+
 public class EnrollDeviceRequest {
-    private Long userId;
+    private UUID userId;
     private String publicKey; // Base64 or PEM
     private String deviceName;
 
-    public Long getUserId() { return userId; }
-    public void setUserId(Long userId) { this.userId = userId; }
+    public UUID getUserId() { return userId; }
+    public void setUserId(UUID userId) { this.userId = userId; }
     
     public String getPublicKey() { return publicKey; }
     public void setPublicKey(String publicKey) { this.publicKey = publicKey; }

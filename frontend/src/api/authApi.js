@@ -46,6 +46,7 @@ export const verifyOtp = async (email, otp, mode = 'login') => {
     browser,
     deviceType,
     fingerprint,
+    location: 'İstanbul, Türkiye (Web)', // Eklendi: Yerel IP'de GeoIP çalışmayacağı için şimdilik Mock
     ipAddress: '127.0.0.1' // Web proxy dev environment
   });
 };

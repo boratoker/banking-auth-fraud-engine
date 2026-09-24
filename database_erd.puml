@@ -1,150 +1,182 @@
 @startuml database_erd
-title TokerBank - Veritabanı İlişki Diyagramı (Temiz ERD)
+title TokerBank - Veritabanı İlişki Diyagramı (ERD)
 
-'======================================================
-' TEMEL AYARLAR
-'======================================================
-hide circle
-hide empty members
-skinparam shadowing false
-skinparam nodesep 70
-skinparam ranksep 70
+' ============================================================
+'  TEMA VE DÜZEN AYARLARI
+' ============================================================
+skinparam linetype ortho
+skinparam nodesep 60
+skinparam ranksep 80
+left to right direction
 
 skinparam class {
-    BackgroundColor #FFFFFF
-    ArrowColor #2C3E50
-    BorderColor #34495E
-    HeaderBackgroundColor #ECF0F1
-    FontSize 13
-    AttributeFontSize 12
+    BackgroundColor #F8FAFC
+    ArrowColor #334155
+    BorderColor #475569
+    HeaderBackgroundColor #E2E8F0
+    FontSize 12
+    AttributeFontSize 11
+}
+hide circle
+hide empty members
+
+' ============================================================
+'  1. KİMLİK & GÜVENLİK YÖNETİMİ
+' ============================================================
+package "Kimlik & Güvenlik (Auth & Security)" {
+    
+    entity "User" as User << (T,#E2E8F0) >> {
+        * id : UUID
+        --
+        * email : String [UNIQUE]
+        * passwordHash : String
+        firstName : String
+        lastName : String
+        lastFailedLoginAt : Timestamp
+        createdAt : Timestamp
+    }
+
+    entity "UserSecuritySettings" as UserSecuritySettings << (T,#E2E8F0) >> {
+        * id : UUID
+        --
+        * user_id : UUID [FK]
+        lastLimitResetDate : Date
+        updatedAt : Timestamp
+    }
+
+    entity "UserSession" as UserSession << (T,#E2E8F0) >> {
+        * id : UUID
+        --
+        * user_id : UUID [FK]
+        sessionTokenHash : String
+        deviceFingerprint : String
+        ipAddress : String
+        expiresAt : Timestamp
+    }
+
+    entity "SecurityAuditLog" as SecurityAuditLog << (T,#E2E8F0) >> {
+        * id : UUID
+        --
+        user_id : UUID [FK] [NULLABLE]
+        eventType : String
+        severity : String
+        ipAddress : String
+        details : String
+        createdAt : Timestamp
+    }
 }
 
-'======================================================
-' TABLOLAR (ENTITIES)
-'======================================================
+' ============================================================
+'  2. HESAPLAR & VARLIKLAR
+' ============================================================
+package "Hesaplar & Varlıklar (Accounts & Assets)" {
+    
+    entity "Account" as Account << (T,#E2E8F0) >> {
+        * id : UUID
+        --
+        * user_id : UUID [FK]
+        * accountNumber : String [UNIQUE]
+        * iban : String [UNIQUE]
+        name : String
+        currency : String
+        balance : BigDecimal
+        createdAt : Timestamp
+    }
 
-entity "UserSecuritySettings" as settings {
-    * id : UUID
-    --
-    * user_id : UUID <<FK>>
-    lastLimitResetDate : Date
-    updatedAt : Timestamp
+    entity "Card" as Card << (T,#E2E8F0) >> {
+        * id : UUID
+        --
+        * user_id : UUID [FK]
+        * account_id : UUID [FK]
+        cardNumberMasked : String
+        totalLimit : BigDecimal
+        createdAt : Timestamp
+    }
+
+    entity "BeneficiaryContact" as BeneficiaryContact << (T,#E2E8F0) >> {
+        * id : UUID
+        --
+        * user_id : UUID [FK]
+        name : String
+        iban : String
+        createdAt : Timestamp
+    }
 }
 
-entity "UserSession" as session {
-    * id : UUID
-    --
-    * user_id : UUID <<FK>>
-    sessionTokenHash : String
-    deviceFingerprint : String
-    ipAddress : String
-    expiresAt : Timestamp
+' ============================================================
+'  3. İŞLEMLER & YAPAY ZEKA (ML FRAUD)
+' ============================================================
+package "İşlemler & ML Fraud (Transactions & Engine)" {
+    
+    entity "Transaction" as Transaction << (T,#E2E8F0) >> {
+        * id : UUID
+        --
+        * referenceId : String [UNIQUE]
+        * user_id : UUID [FK]
+        * source_account_id : UUID [FK]
+        destIban : String
+        amount : BigDecimal
+        transferType : String
+        status : String
+        riskScore : BigDecimal
+        riskLevel : String
+        createdAt : Timestamp
+    }
+
+    entity "FraudEvaluation" as FraudEvaluation << (T,#E2E8F0) >> {
+        * id : UUID
+        --
+        * transaction_id : UUID [FK] [UNIQUE]
+        * user_id : UUID [FK]
+        model_id : UUID [FK]
+        riskScore : int
+        riskLevel : String
+        decision : String
+        triggeredRules : String
+        createdAt : Timestamp
+    }
+
+    entity "FraudFeatureStore" as FraudFeatureStore << (T,#E2E8F0) >> {
+        * id : UUID
+        --
+        * transaction_id : UUID [FK] [UNIQUE]
+        featureVector : JSON
+        snapshotTime : Timestamp
+    }
+
+    entity "FraudModel" as FraudModel << (T,#E2E8F0) >> {
+        * id : UUID
+        --
+        modelName : String
+        modelVersion : String
+        isActive : boolean
+        deployedAt : Timestamp
+    }
 }
 
-entity "User" as user {
-    * id : UUID
-    --
-    * email : String <<UNIQUE>>
-    * passwordHash : String
-    firstName : String
-    lastName : String
-    createdAt : Timestamp
-}
+' ============================================================
+'  İLİŞKİLER (Crow's Foot Notation & Orthogonal Layout)
+' ============================================================
 
-entity "SecurityAuditLog" as audit {
-    * id : UUID
-    --
-    user_id : UUID <<FK>>
-    eventType : String
-    ipAddress : String
-    details : String
-}
+' Auth İlişkileri
+User ||-down-|| UserSecuritySettings : "has 1"
+User ||-up-o{ UserSession : "active in 0..N"
+User ||-up-o{ SecurityAuditLog : "tracks 0..N"
 
-entity "BeneficiaryContact" as contact {
-    * id : UUID
-    --
-    * user_id : UUID <<FK>>
-    name : String
-    iban : String
-}
+' Varlık İlişkileri
+User ||-right-o{ Account : "owns 0..N"
+User ||-right-o{ BeneficiaryContact : "saves 0..N"
+Account ||-down-o{ Card : "linked to 0..N"
+User ||-down-o{ Card : "holds 0..N"
 
-entity "Account" as account {
-    * id : UUID
-    --
-    * user_id : UUID <<FK>>
-    * accountNumber : String <<UNIQUE>>
-    * iban : String <<UNIQUE>>
-    currency : String
-    balance : BigDecimal
-}
+' İşlem İlişkileri
+User ||-down-o{ Transaction : "initiates 0..N"
+Account ||-right-o{ Transaction : "source for 0..N"
 
-entity "Card" as card {
-    * id : UUID
-    --
-    * user_id : UUID <<FK>>
-    * account_id : UUID <<FK>>
-    cardNumberMasked : String
-    totalLimit : BigDecimal
-}
-
-entity "Transaction" as txn {
-    * id : UUID
-    --
-    * referenceId : String <<UNIQUE>>
-    * user_id : UUID <<FK>>
-    * source_account_id : UUID <<FK>>
-    destIban : String
-    amount : BigDecimal
-    status : String
-    riskScore : BigDecimal
-    riskLevel : String
-}
-
-entity "FraudFeatureStore" as features {
-    * id : UUID
-    --
-    * transaction_id : UUID <<FK>>
-    featureVector : JSON
-    snapshotTime : Timestamp
-}
-
-entity "FraudEvaluation" as fraud {
-    * id : UUID
-    --
-    * transaction_id : UUID <<FK>>
-    * user_id : UUID <<FK>>
-    model_id : UUID <<FK>>
-    riskScore : int
-    decision : String
-    triggeredRules : String
-}
-
-entity "FraudModel" as model {
-    * id : UUID
-    --
-    modelName : String
-    modelVersion : String
-    isActive : boolean
-}
-
-'======================================================
-' İLİŞKİLER
-'======================================================
-' Manuel yönlendirme ile çizgilerin kesişmesi tamamen engellenmiştir.
-
-settings |o-down-|| user
-session }o-right-|| user
-user ||-right-o{ audit
-user ||-right-o{ contact
-
-user ||-down-o{ account
-account ||-right-o{ card
-
-account ||-down-o{ txn
-user ||-down-o{ txn
-
-txn ||-down-|| fraud
-txn ||-right-|| features
-model ||-right-o{ fraud
+' Fraud / ML İlişkileri
+Transaction ||-right-|| FraudEvaluation : "evaluated by 1"
+Transaction ||-down-|| FraudFeatureStore : "snapshots 1"
+FraudModel ||-down-o{ FraudEvaluation : "predicts for 0..N"
+User ||-right-o{ FraudEvaluation : "subject of 0..N"
 
 @enduml

@@ -55,9 +55,11 @@ const TransactionsView = ({ initialSearchTerm = '' }) => {
 
   const handleEnrollDevice = async () => {
     try {
+      let user = { id: '550e8400-e29b-41d4-a716-446655440000' }; // Fallback to demo user UUID
       const userStr = localStorage.getItem('user');
-      if (!userStr) { alert("Kullanıcı bilgisi bulunamadı."); return; }
-      const user = JSON.parse(userStr);
+      if (userStr) {
+         user = JSON.parse(userStr);
+      }
 
       const result = await generateAndEnrollKeyPair();
       if (result.success) {
@@ -75,9 +77,9 @@ const TransactionsView = ({ initialSearchTerm = '' }) => {
   const handleSignTransaction = async () => {
     try {
       setSigningLog([]);
+      let user = { id: '550e8400-e29b-41d4-a716-446655440000' };
       const userStr = localStorage.getItem('user');
-      if (!userStr) return;
-      const user = JSON.parse(userStr);
+      if (userStr) user = JSON.parse(userStr);
 
       if (!transferAmount || !transferIban) {
         alert("Lütfen IBAN ve Tutar giriniz."); return;
@@ -117,53 +119,37 @@ const TransactionsView = ({ initialSearchTerm = '' }) => {
           <h2>Hesap Hareketleri & Raporlar</h2>
           <p>Gelen/giden tüm transferler, kart harcamaları ve AI Fraud Shield doğrulama durumları.</p>
         </div>
-        <div style={{ display: 'flex', gap: '10px' }}>
-          {!isEnrolled ? (
-            <button className="btn btn-secondary" onClick={handleEnrollDevice}>
-              🛡️ Cihazı Güvenilir Olarak Kaydet (Enroll)
-            </button>
-          ) : (
-            <button className="btn btn-primary" onClick={() => setShowTransferModal(true)}>
-              💸 Yeni Transfer Yap
-            </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {isEnrolled && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', backgroundColor: '#ecfdf5', border: '1px solid #10b981', borderRadius: '20px', color: '#047857', fontWeight: '600', fontSize: '14px' }}>
+              <svg width="16" height="16" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+              Cihaz Kayıtlı
+            </div>
           )}
+          <button 
+            onClick={handleEnrollDevice}
+            style={{ 
+              display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', 
+              backgroundColor: isEnrolled ? '#f1f5f9' : '#0f172a', 
+              color: isEnrolled ? '#475569' : '#ffffff', 
+              border: 'none', 
+              borderRadius: '8px', fontWeight: '600', fontSize: '14px', cursor: 'pointer', transition: 'all 0.2s',
+              boxShadow: isEnrolled ? 'none' : '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+            }}
+            onMouseOver={(e) => {
+              if(!isEnrolled) e.currentTarget.style.backgroundColor = '#1e293b';
+              else e.currentTarget.style.backgroundColor = '#e2e8f0';
+            }}
+            onMouseOut={(e) => {
+              if(!isEnrolled) e.currentTarget.style.backgroundColor = '#0f172a';
+              else e.currentTarget.style.backgroundColor = '#f1f5f9';
+            }}
+          >
+            <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+            {isEnrolled ? 'Anahtarı Yenile' : 'Cihazı Güvenilir Olarak Kaydet'}
+          </button>
         </div>
       </div>
-
-      {showTransferModal && (
-        <div className="modal-overlay" onClick={() => setShowTransferModal(false)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} style={{maxWidth: '600px'}}>
-            <h3>Kriptografik İşlem İmzalama (Demo)</h3>
-            <p className="text-muted" style={{fontSize: '14px', marginBottom: '1rem'}}>
-              PSD2 SCA (Strong Customer Authentication) kapsamında, bu transfer tarayıcınızın WebCrypto donanımı tarafından <strong>asimetrik şifreleme (ECDSA P-256)</strong> ile imzalanacaktır.
-            </p>
-            
-            <div className="form-group">
-              <label>Alıcı IBAN</label>
-              <input type="text" className="form-input" placeholder="TR..." value={transferIban} onChange={e => setTransferIban(e.target.value)} />
-            </div>
-            <div className="form-group">
-              <label>Tutar (₺)</label>
-              <input type="number" className="form-input" placeholder="1000" value={transferAmount} onChange={e => setTransferAmount(e.target.value)} />
-            </div>
-
-
-            <button className="btn btn-primary" style={{width: '100%', marginTop: '1rem'}} onClick={handleSignTransaction}>
-              İmzala ve Gönder
-            </button>
-
-            {signingLog.length > 0 && (
-              <div style={{ marginTop: '1rem', background: '#1e1e1e', color: '#00ff00', padding: '1rem', borderRadius: '8px', fontFamily: 'monospace', fontSize: '12px', whiteSpace: 'pre-wrap', maxHeight: '200px', overflowY: 'auto' }}>
-                {signingLog.map((log, i) => (
-                  <div key={i} style={{ color: log.includes('❌') || log.includes('🚨') ? '#ff4444' : '#00ff00' }}>
-                    {log}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Analytics Summary */}
       <div className="metrics-grid">
