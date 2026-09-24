@@ -1,0 +1,140 @@
+@startuml OTP_Sequence
+title TokerBank - İki Aşamalı Doğrulama (2FA / OTP) Yaşam Döngüsü & Doğrulama Akışı
+
+' ============================================================
+'  TokerBank 2FA / OTP Authentication Sequence Diagram
+' ============================================================
+
+skinparam maxMessageSize 160
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam defaultFontName "Helvetica", "Arial", sans-serif
+
+skinparam sequence {
+    ArrowColor #334155
+    ActorBorderColor #1E293B
+    ActorBackgroundColor #E2E8F0
+    LifeLineBorderColor #64748B
+    LifeLineBackgroundColor #F1F5F9
+    ParticipantBorderColor #2563EB
+    ParticipantBackgroundColor #3B82F6
+    ParticipantFontColor #FFFFFF
+    ParticipantFontSize 13
+    ParticipantFontStyle bold
+    GroupBorderColor #94A3B8
+    GroupBackgroundColor #F8FAFC
+    GroupHeaderFontColor #0F172A
+    DividerBackgroundColor #E2E8F0
+    DividerFontColor #1E293B
+}
+
+actor "Kullanıcı\n(Web / Mobil)" as User
+participant "İstemci Arayüzü\n(React / React Native)" as Client
+participant "API Gateway\n(:8080)" as Gateway
+participant "AuthController\n(Auth-Service :8081)" as AuthCtrl
+database "Redis Cache\n(TTL: 2 Dakika)" as Redis
+participant "EmailService\n(JavaMail / SMTP)" as Email
+database "PostgreSQL\n(User & Session Tables)" as DB
+queue "Apache Kafka\n(auth-events)" as Kafka
+
+== 1. AŞAMA: Şifre Doğrulama ve OTP Üretim & Gönderim Akışı ==
+
+User -> Client: E-posta ve Şifre girer ("Giriş Yap" tıklar)
+activate Client
+
+Client -> Gateway: POST /api/v1/auth/verify-password\n{email, password, channel: "WEB"|"MOBILE"}
+activate Gateway
+
+Gateway -> AuthCtrl: İsteği yönlendir
+activate AuthCtrl
+
+AuthCtrl -> DB: findByEmail(email)
+activate DB
+DB --> AuthCtrl: User Entity (Password Hash, Son Hatalı Giriş)
+deactivate DB
+
+AuthCtrl -> AuthCtrl: passwordEncoder.matches(password, hash)
+
+alt #FFF1F2 Şifre Hatalı
+    AuthCtrl -> DB: setLastFailedLoginAt(NOW)
+    AuthCtrl -> Kafka: send("LOGIN_FAILED: " + email)
+    AuthCtrl --> Gateway: 400 Bad Request ("Hatalı şifre")
+    Gateway --> Client: Hata Mesajı
+    Client --> User: "Şifre hatalı, lütfen tekrar deneyin"
+else #F0FDF4 Şifre Doğru
+    AuthCtrl -> AuthCtrl: 6 Haneli Kriptografik Kod Üret (SecureRandom)
+    
+    ' Redis'e Kayıt
+    AuthCtrl -> Redis: SET "OTP:" + email -> [OTP_KODU]\n(EXPIRE: 120 sn)
+    activate Redis
+    Redis --> AuthCtrl: OK (TTL Başlatıldı)
+    deactivate Redis
+
+    ' Bildirim Gönderimi
+    alt channel == "WEB"
+        AuthCtrl -> Email: sendOtpEmail(email, otp, "login")
+        activate Email
+        Email --> User: 📧 6 Haneli OTP Doğrulama E-postası
+        deactivate Email
+    else channel == "MOBILE"
+        AuthCtrl --> Client: 📱 Push Bildirimi / In-App OTP Alert
+    end
+
+    AuthCtrl -> Kafka: send("LOGIN_ATTEMPT: " + email)
+    AuthCtrl --> Gateway: 200 OK ("Şifre doğrulandı, OTP gönderildi")
+    deactivate AuthCtrl
+    Gateway --> Client: OTP Ekranına Geçiş Komutu
+    deactivate Gateway
+    Client --> User: "Lütfen 6 haneli doğrulama kodunu giriniz" (Geri Sayım: 120s)
+end
+
+== 2. AŞAMA: OTP Doğrulama ve Güvenli Oturum Başlatma ==
+
+User -> Client: 6 Haneli Kodu Girer ("Doğrula" tıklar)
+Client -> Gateway: POST /api/v1/auth/verify-otp\n{email, otp, deviceInfo, fingerprint, ipAddress}
+activate Gateway
+
+Gateway -> AuthCtrl: İsteği yönlendir
+activate AuthCtrl
+
+AuthCtrl -> Redis: GET "OTP:" + email
+activate Redis
+Redis --> AuthCtrl: Kayıtlı OTP Kodu
+deactivate Redis
+
+alt #FFF1F2 Kod Hatalı veya Süresi Dolmuş (Redis TTL Expired)
+    AuthCtrl -> Kafka: send("LOGIN_FAILED: " + email)
+    AuthCtrl --> Gateway: 400 Bad Request ("Geçersiz veya süresi dolmuş OTP!")
+    Gateway --> Client: Hata Yanıtı
+    Client --> User: "Kod hatalı veya süresi doldu!"
+else #F0FDF4 Kod Başarıyla Eşleşti (Doğrulandı)
+    ' Tek kullanımlık güvenlik: Hemen sil
+    AuthCtrl -> Redis: DEL "OTP:" + email (Tek kullanımlık tüketim)
+    activate Redis
+    Redis --> AuthCtrl: 1 (Silindi)
+    deactivate Redis
+
+    ' Cihaz Oturumu Kaydı (Deduplication & Session Management)
+    AuthCtrl -> DB: findFirstByUserIdAndDeviceFingerprint(...)
+    activate DB
+    DB --> AuthCtrl: Mevcut Cihaz / Yeni Oturum
+    
+    AuthCtrl -> DB: save(UserSession)\n[isActive=true, lastActiveAt=NOW, deviceInfo, ip, browser]
+    DB --> AuthCtrl: Session Kaydedildi
+    deactivate DB
+
+    AuthCtrl -> Kafka: send("LOGIN_SUCCESS: " + email)
+
+    AuthCtrl --> Gateway: 200 OK {message, userId, firstName, lastName, email}
+    deactivate AuthCtrl
+
+    Gateway --> Client: 200 OK (Oturum Bilgileri)
+    deactivate Gateway
+
+    Client -> Client: localStorage.setItem("user", data)\nsetAuthEmail(email)
+    Client --> User: Ana Bankacılık Ekranı Açılır (Dashboard)
+    deactivate Client
+end
+
+@enduml

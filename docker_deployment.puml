@@ -1,0 +1,129 @@
+@startuml Docker_Deployment_Diagram
+title TokerBank - Docker Compose Dağıtım (Deployment) Mimarisi
+
+' ============================================================
+'  TokerBank Clean & Modern Deployment Architecture
+' ============================================================
+
+top to bottom direction
+
+skinparam backgroundColor #F8FAFC
+skinparam defaultFontName "Helvetica", "Arial", sans-serif
+skinparam defaultFontSize 11
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam linetype ortho
+skinparam nodesep 45
+skinparam ranksep 40
+
+' --- Renk ve Stil Paleti ---
+skinparam package {
+  BorderColor #94A3B8
+  FontColor #1E293B
+  FontSize 12
+  FontStyle bold
+}
+
+skinparam node {
+  BorderThickness 1
+}
+
+skinparam arrow {
+  Color #475569
+  FontColor #334155
+  FontSize 10
+}
+
+' ============================================================
+'  1. İSTEMCİ KATMANI (Client Tier)
+' ============================================================
+package "1. İstemci Uygulamaları (Client Layer)" as P_Clients #EFF6FF {
+  node "Web Tarayıcı\n<<React 19 + Vite>>\nPort: 5173" as ClientWeb #DBEAFE
+  node "Mobil Uygulama\n<<React Native / Expo>>\nPort: 8084 / 8085" as ClientMobile #DBEAFE
+}
+
+' ============================================================
+'  2. HOST UYGULAMA KATMANI (Host Microservices)
+' ============================================================
+package "2. Host Uygulama & Gateway Katmanı (Spring Boot / JVM)" as P_Host #F0FDF4 {
+  node "API Gateway\n<<Spring Cloud Gateway>>\nHost Port: 8080" as AppGateway #DCFCE7
+  node "Auth & Fraud Engine Servisi\n<<Spring Boot + ONNX ML>>\nHost Port: 8081" as AppAuth #DCFCE7
+  node "İşlem İmzalama Servisi (Signing)\n<<Spring Boot WebCrypto SCA>>\nHost Port: 8082" as AppSigning #DCFCE7
+}
+
+' ============================================================
+'  3. DOCKER COMPOSE ALTYAPISI (Docker Compose Infrastructure)
+' ============================================================
+package "3. Docker Compose Sanal Altyapısı (docker-compose.yml)" as P_Docker #F8FAFC {
+
+  ' --- Veri & Cache Grubu ---
+  package "Veri Depolama & Önbellek (Storage & Cache)" #F1F5F9 {
+    node "banking-postgres\n<<postgres:15-alpine>>\nPort: 5432:5432" as ContPostgres #E2E8F0 {
+      database "PostgreSQL DB\n(banking_auth)" as DB_Engine #CBD5E1
+    }
+    storage "postgres_data\n<<Named Volume>>" as Vol_Postgres #E2E8F0
+
+    node "banking-redis\n<<redis:7-alpine>>\nPort: 6379:6379" as ContRedis #E2E8F0 {
+      database "Redis Store\n(OTP, Rate Limit, Cache)" as Redis_Engine #CBD5E1
+    }
+  }
+
+  ' --- Mesajlaşma & Streaming Grubu ---
+  package "Olay Akışı & Asenkron Kuyruklar (Messaging & Events)" #FFFBEB {
+    node "banking-kafka\n<<cp-kafka:7.5.0>>\nPorts: 9092, 29092" as ContKafka #FEF3C7 {
+      queue "Kafka Broker 1\n(fraud-alerts, login-events)" as Kafka_Engine #FDE68A
+    }
+
+    node "banking-zookeeper\n<<cp-zookeeper:7.5.0>>\nPort: 2181:2181" as ContZK #FEF3C7 {
+      component "Zookeeper\nCoordinator" as ZK_Engine #FDE68A
+    }
+
+    node "banking-rabbitmq\n<<rabbitmq:3-management>>\nPorts: 5672, 15672" as ContRabbit #FEF3C7 {
+      queue "RabbitMQ\nAMQP Queue" as Rabbit_Engine #FDE68A
+    }
+  }
+
+  ' --- Gözlemlenebilirlik Grubu ---
+  package "İzleme & Metrikler (Observability & Monitoring)" #FAF5FF {
+    node "banking-prometheus\n<<prom/prometheus:latest>>\nPort: 9090:9090" as ContProm #F3E8FF {
+      component "Prometheus Engine\n(TSDB Collector)" as Prom_Engine #E9D5FF
+    }
+    file "prometheus.yml\n<<Bind Mount>>" as File_PromYaml #F3E8FF
+
+    node "banking-grafana\n<<grafana/grafana:latest>>\nPort: 3000:3000" as ContGraf #F3E8FF {
+      component "Grafana Dashboard\n(Visual Analytics)" as Graf_Engine #E9D5FF
+    }
+  }
+}
+
+' ============================================================
+'  BAĞLANTILAR VE AKIŞLAR (Clean Directed Connections)
+' ============================================================
+
+' 1. İstemcilerden Gateway'e
+ClientWeb --> AppGateway : HTTP / REST (:8080)
+ClientMobile --> AppGateway : HTTP / REST (:8080)
+
+' 2. Gateway'den Mikroservislere
+AppGateway --> AppAuth : /api/v1/auth, /banking (:8081)
+AppGateway --> AppSigning : /api/v1/signing (:8082)
+
+' 3. Servislerden Docker Container'larına (Açık ve Sade Port Yönlendirmeleri)
+AppAuth --> ContPostgres : JDBC (:5432)
+AppAuth --> ContRedis : Lettuce Cache (:6379)
+AppAuth --> ContKafka : Producer (:9092)
+AppAuth ..> ContRabbit : AMQP (:5672)
+
+AppSigning --> ContPostgres : JDBC (:5432)
+
+' 4. Container İçi / Container Arası İlişkiler
+ContKafka .right.> ContZK : zookeeper:2181\n(Cluster Metadata)
+DB_Engine -down-> Vol_Postgres : mount: /var/lib/postgresql/data
+File_PromYaml -right-> Prom_Engine : mount: /etc/prometheus/...
+
+' 5. Prometheus Scrape & Grafana Görselleştirme
+Prom_Engine --> AppAuth : Scrape /actuator/prometheus\n(via host.docker.internal:8081)
+Prom_Engine --> AppGateway : Scrape /actuator/prometheus\n(via host.docker.internal:8080)
+ContGraf --> Prom_Engine : Query PromQL (:9090)
+
+@enduml
