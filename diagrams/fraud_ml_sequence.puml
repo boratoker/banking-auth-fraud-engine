@@ -1,5 +1,5 @@
 @startuml Fraud_ML_Sequence
-title TokerBank AI Fraud Shield - Çıkarım (Inference) Akışı
+title TokerBank AI Fraud Shield - Inference Flow
 
 skinparam maxMessageSize 150
 skinparam backgroundColor #FFFFFF
@@ -14,8 +14,8 @@ skinparam sequence {
     ParticipantFontName Arial
 }
 
-actor "Kullanıcı" as User
-participant "BankingController\n(API Gateway üzerinden)" as Controller
+actor "User" as User
+participant "BankingController\n(via API Gateway)" as Controller
 participant "BankingService" as Service
 participant "MlFraudInferenceEngine" as MLEngine
 participant "FeatureEngineeringService" as FeatureEng
@@ -23,7 +23,7 @@ participant "ONNX Runtime\n(XGBoost Model)" as ONNX
 database "PostgreSQL\n(Fraud Tables)" as DB
 participant "Kafka\n(fraud-alerts)" as Kafka
 
-User -> Controller: POST /transfers (Tutar, IBAN, Cihaz ID, IP)
+User -> Controller: POST /transfers (Amount, IBAN, Device ID, IP)
 activate Controller
 
 Controller -> Service: processTransfer(request)
@@ -34,49 +34,49 @@ activate MLEngine
 
 MLEngine -> FeatureEng: computeFeatures(...)
 activate FeatureEng
-FeatureEng --> MLEngine: Map<String, Object> (18 Kriter Vektörü)
+FeatureEng --> MLEngine: Map<String, Object> (18-Feature Vector)
 deactivate FeatureEng
 
-MLEngine -> MLEngine: double[]'a çevir & Input Tensor oluştur
+MLEngine -> MLEngine: Convert to double[] & Create Input Tensor
 
-alt ONNX Model Yüklüyse
+alt If ONNX Model is Loaded
     MLEngine -> ONNX: session.run(tensor)
     activate ONNX
-    ONNX --> MLEngine: fraudProb (Örn: 0.85)
+    ONNX --> MLEngine: fraudProb (e.g., 0.85)
     deactivate ONNX
-    MLEngine -> MLEngine: ML Skoru (fraudProb * 100) = 85.0
-else Model Yoksa / Hata Varsa (Fallback)
-    MLEngine -> MLEngine: ML Skoru = 0 (Atlanır)
+    MLEngine -> MLEngine: ML Score (fraudProb * 100) = 85.0
+else If No Model / Error (Fallback)
+    MLEngine -> MLEngine: ML Score = 0 (Skipped)
 end
 
-MLEngine -> MLEngine: computeRuleBasedScore(features) -> Kural Skoru (Örn: 45)
-MLEngine -> MLEngine: Hibrit Skor = (ML * 0.7) + (Kural * 0.3) = 73.0
+MLEngine -> MLEngine: computeRuleBasedScore(features) -> Rule Score (e.g., 45)
+MLEngine -> MLEngine: Hybrid Score = (ML * 0.7) + (Rule * 0.3) = 73.0
 
 MLEngine -> MLEngine: determineRiskLevel() -> "HIGH"
 MLEngine -> MLEngine: determineDecision() -> "PUSH_CHALLENGED"
-MLEngine -> MLEngine: computeShapExplanations() -> SHAP JSON (Nedenleri)
+MLEngine -> MLEngine: computeShapExplanations() -> SHAP JSON (Reasons)
 
-MLEngine -> DB: save(FraudFeatureStore) (18 Kriterin Anlık Görüntüsü)
-MLEngine -> DB: save(FraudEvaluation) (Risk Skoru, Karar, SHAP, Latency)
+MLEngine -> DB: save(FraudFeatureStore) (Snapshot of 18 Features)
+MLEngine -> DB: save(FraudEvaluation) (Risk Score, Decision, SHAP, Latency)
 
-MLEngine --> Service: FraudEvaluation Sonucu
+MLEngine --> Service: FraudEvaluation Result
 deactivate MLEngine
 
-alt Karar == "COMPLETED" (0-30 Puan)
+alt Decision == "COMPLETED" (0-30 Points)
     Service -> DB: save(Transaction - APPROVED)
     Service -> Kafka: event(TRANSFER_COMPLETED)
-    Service --> Controller: Başarılı Yanıt (200 OK)
-    Controller --> User: Transfer Gerçekleşti
-else Karar == "PUSH_CHALLENGED" (31-84 Puan)
+    Service --> Controller: Success Response (200 OK)
+    Controller --> User: Transfer Executed
+else Decision == "PUSH_CHALLENGED" (31-84 Points)
     Service -> DB: save(Transaction - PENDING_OTP/PUSH)
     Service -> Kafka: event(TRANSFER_PENDING)
-    Service --> Controller: Beklemede (202 Accepted - Push Gerekli)
-    Controller --> User: Mobil Onay Ekranına Yönlendir!
-else Karar == "CRITICAL_PUSH_CHALLENGED" (85-100 Puan)
+    Service --> Controller: Pending (202 Accepted - Push Required)
+    Controller --> User: Redirect to Mobile Approval Screen!
+else Decision == "CRITICAL_PUSH_CHALLENGED" (85-100 Points)
     Service -> DB: save(Transaction - PENDING_CRITICAL)
     Service -> Kafka: event(FRAUD_ALERT_CRITICAL)
-    Service --> Controller: Beklemede (202 Accepted - OTP + Push Gerekli)
-    Controller --> User: OTP ve Push Doğrulaması İste!
+    Service --> Controller: Pending (202 Accepted - OTP + Push Required)
+    Controller --> User: Request OTP and Push Verification!
 end
 
 deactivate Service

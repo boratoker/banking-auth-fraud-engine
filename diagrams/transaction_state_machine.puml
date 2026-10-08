@@ -1,8 +1,8 @@
 @startuml Transaction_Risk_Tree
-title TokerBank - Transfer & Adaptif Risk Karar Ağacı (State Tree Diagram)
+title TokerBank - Transfer & Adaptive Risk State Tree Diagram
 
 ' ============================================================
-'  Hiyerarşik Ağaç (Tree-Structured) Durum ve Karar Mimarisi
+'  Hierarchical Tree-Structured State and Decision Architecture
 ' ============================================================
 
 top to bottom direction
@@ -15,7 +15,7 @@ skinparam roundcorner 10
 skinparam nodesep 25
 skinparam ranksep 40
 
-' --- Stil Tanımları ---
+' --- Style Definitions ---
 skinparam state {
   BorderColor #475569
   BorderThickness 1.2
@@ -28,55 +28,55 @@ skinparam state {
 }
 
 ' ============================================================
-'  1. KÖK DÜĞÜM (Root Node)
+'  1. ROOT NODE
 ' ============================================================
 
-[*] --> S_EVAL : Transfer Talebi (POST /transfers)\n[Bakiye ve Günlük Limit Uygun]
+[*] --> S_EVAL : Transfer Request (POST /transfers)\n[Balance & Daily Limit Valid]
 
-state "PENDING_EVALUATION\n---\n• 18 Özellik Vektörü Çıkarımı\n• ONNX XGBoost Risk Skoru (0-100)\n• Kural: Tutar > 500k TL & Bakiye > %70" as S_EVAL #FEF3C7
+state "PENDING_EVALUATION\n---\n• 18-Feature Vector Extraction\n• ONNX XGBoost Risk Score (0-100)\n• Rule: Amount > 500k & Balance > 70%" as S_EVAL #FEF3C7
 
 ' ============================================================
-'  2. AĞAÇ DALLARI (Tree Branches)
+'  2. TREE BRANCHES
 ' ============================================================
 
-' --- DAL 1: Düşük Risk ---
-state "DAL 1: DÜŞÜK RİSK (%0 - 25)" as Branch1 #F0FDF4 {
-  state "APPROVE\n(Doğrudan Onay)" as B1_Approve #DCFCE7
-  state "COMPLETED\n(Bakiye Aktarıldı)" as B1_Comp #86EFAC
+' --- BRANCH 1: Low Risk ---
+state "BRANCH 1: LOW RISK (0% - 25%)" as Branch1 #F0FDF4 {
+  state "APPROVE\n(Direct Approval)" as B1_Approve #DCFCE7
+  state "COMPLETED\n(Balance Transferred)" as B1_Comp #86EFAC
   
-  B1_Approve --> B1_Comp : Bakiye Düş
+  B1_Approve --> B1_Comp : Deduct Balance
 }
 
-' --- DAL 2: Orta & Yüksek Risk ---
-state "DAL 2: ORTA / YÜKSEK RİSK (%26 - 80)" as Branch2 #EFF6FF {
-  state "PUSH_CHALLENGED\n(Mobil Onay Bekleniyor)" as B2_Push #DBEAFE
-  state "COMPLETED\n(Transfer Başarılı)" as B2_Comp #86EFAC
-  state "REJECTED\n(İşlem İptal)" as B2_Rej #FECDD3
+' --- BRANCH 2: Medium & High Risk ---
+state "BRANCH 2: MEDIUM / HIGH RISK (26% - 80%)" as Branch2 #EFF6FF {
+  state "PUSH_CHALLENGED\n(Awaiting Mobile Approval)" as B2_Push #DBEAFE
+  state "COMPLETED\n(Transfer Successful)" as B2_Comp #86EFAC
+  state "REJECTED\n(Transaction Cancelled)" as B2_Rej #FECDD3
   
-  B2_Push --> B2_Comp : Mobilde "ONAYLA"
-  B2_Push --> B2_Rej : "REDDET" / 60s Zaman Aşımı
+  B2_Push --> B2_Comp : 'APPROVE' on Mobile
+  B2_Push --> B2_Rej : 'REJECT' / 60s Timeout
 }
 
-' --- DAL 3: Kritik Risk ---
-state "DAL 3: KRİTİK RİSK (%81 - 100 veya Kural)" as Branch3 #FFF7ED {
-  state "CRITICAL_PUSH_CHALLENGED\n(1. Aşama: Mobil Bildirim)" as B3_Crit #FED7AA
-  state "OTP_CHALLENGED\n(2. Aşama: E-posta Kodu)" as B3_Otp #FDBA74
-  state "COMPLETED\n(Transfer Başarılı)" as B3_Comp #86EFAC
-  state "REJECTED\n(İşlem İptal)" as B3_Rej #FECDD3
+' --- BRANCH 3: Critical Risk ---
+state "BRANCH 3: CRITICAL RISK (81% - 100% or Rule)" as Branch3 #FFF7ED {
+  state "CRITICAL_PUSH_CHALLENGED\n(Stage 1: Mobile Push)" as B3_Crit #FED7AA
+  state "OTP_CHALLENGED\n(Stage 2: Email OTP)" as B3_Otp #FDBA74
+  state "COMPLETED\n(Transfer Successful)" as B3_Comp #86EFAC
+  state "REJECTED\n(Transaction Cancelled)" as B3_Rej #FECDD3
   
-  B3_Crit --> B3_Otp : 1. Aşama Onaylandı
-  B3_Crit --> B3_Rej : 1. Aşamada Reddedildi
-  B3_Otp --> B3_Comp : 2. Aşama Doğru OTP
-  B3_Otp --> B3_Rej : Hatalı Kod / Süre Bitti
+  B3_Crit --> B3_Otp : Stage 1 Approved
+  B3_Crit --> B3_Rej : Stage 1 Rejected
+  B3_Otp --> B3_Comp : Stage 2 Correct OTP
+  B3_Otp --> B3_Rej : Invalid Code / Timeout
 }
 
 
 ' ============================================================
-'  KÖKTEN DALLARA BAĞLANTILAR (Tree Distribution)
+'  ROOT TO BRANCH DISTRIBUTION
 ' ============================================================
 
-S_EVAL --> B1_Approve : [Risk Skoru 0 - 25]
-S_EVAL --> B2_Push : [Risk Skoru 26 - 80]
-S_EVAL --> B3_Crit : [Risk Skoru 81 - 100\nveya Kritik Kural]
+S_EVAL --> B1_Approve : [Risk Score 0 - 25]
+S_EVAL --> B2_Push : [Risk Score 26 - 80]
+S_EVAL --> B3_Crit : [Risk Score 81 - 100\nor Critical Rule]
 
 @enduml

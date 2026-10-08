@@ -1,0 +1,44 @@
+@startuml ML_Training_Pipeline
+title TokerBank AI Fraud Shield - MLOps & Training Pipeline
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Helvetica", "Arial", sans-serif
+skinparam defaultFontSize 12
+skinparam ActivityBackgroundColor #F8FAFC
+skinparam ActivityBorderColor #2C3E50
+skinparam ArrowColor #34495E
+
+|1. Data Engineering|
+start
+:Aggregate Transaction Data\n(from PostgreSQL);
+:Generate 18-Feature Vector;
+:Address Class Imbalance\n(Legitimate vs. Fraud);
+
+|2. Data Partitioning|
+:Partition Dataset into 3 Isolated Sets;
+split
+   :Training Set (70%)\n(Used for learning);
+split again
+   :Validation Set (15%)\n(Hyperparameter tuning);
+split again
+   :Hold-out Test Set (15%)\n(Unbiased evaluation);
+end split
+
+|3. Dual-Algorithm Training|
+fork
+    :Isolation Forest (Unsupervised)\nDetects Zero-Day Anomalies;
+fork again
+    :XGBoost (Supervised)\nClassifies Known Fraud Patterns\n(using 'scale_pos_weight');
+end fork
+
+|4. Evaluation & Explainability|
+:Evaluate Metrics on Hold-out Test Set\n(Accuracy, AUC-ROC, F1-Score);
+:Generate SHAP Explanations\n(Feature Importance Analysis);
+
+|5. Deployment (MLOps)|
+:Convert Python Models to ONNX Format;
+:Generate Metadata JSON\n(Version, Thresholds, SHAP base values);
+:Zero-Downtime Hot-load into\nJava Spring Boot Engine;
+stop
+
+@enduml
