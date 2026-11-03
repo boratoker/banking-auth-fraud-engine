@@ -91,7 +91,9 @@ public class Transaction {
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();
         if (this.referenceId == null) {
-            this.referenceId = "TXN-" + System.currentTimeMillis();
+            // Aynı milisaniyede oluşan eşzamanlı transferlerde unique çakışmasını önlemek için rastgele ek
+            this.referenceId = "TXN-" + System.currentTimeMillis() + "-"
+                + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
         }
     }
 

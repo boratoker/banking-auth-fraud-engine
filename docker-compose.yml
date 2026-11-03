@@ -83,5 +83,65 @@ services:
       - prometheus
     restart: always
 
+  # 6. Backend Mikroservisleri
+  signing-service:
+    build:
+      context: ./backend/signing-service
+    container_name: banking-signing-service
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/banking_auth
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+      SPRING_DATASOURCE_DRIVER: org.postgresql.Driver
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    depends_on:
+      - postgres
+      - rabbitmq
+    ports:
+      - "8083:8083"
+    restart: unless-stopped
+
+  auth-service:
+    build:
+      context: ./backend/auth-service
+    container_name: banking-auth-service
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/banking_auth
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+      SPRING_DATASOURCE_DRIVER: org.postgresql.Driver
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SIGNING_SERVICE_URL: http://signing-service:8083
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+      - kafka
+      - signing-service
+    ports:
+      - "8081:8081"
+    restart: unless-stopped
+
+  api-gateway:
+    build:
+      context: ./backend/api-gateway
+    container_name: banking-api-gateway
+    environment:
+      SPRING_DATA_REDIS_HOST: redis
+      AUTH_SERVICE_URL: http://auth-service:8081
+      SIGNING_SERVICE_URL: http://signing-service:8083
+    depends_on:
+      - redis
+      - auth-service
+      - signing-service
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
 volumes:
   postgres_data:

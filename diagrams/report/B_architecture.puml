@@ -1,0 +1,122 @@
+@startuml B_Architecture
+' Appendix B – System Architecture Diagram
+
+title TokerBank – System Architecture
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 12
+skinparam shadowing false
+skinparam roundcorner 10
+skinparam nodesep 40
+skinparam ranksep 60
+skinparam ArrowColor #455A64
+skinparam ArrowFontSize 10
+skinparam ArrowFontColor #37474F
+left to right direction
+
+skinparam rectangle {
+  BackgroundColor<<client>> #E3F2FD
+  BorderColor<<client>> #1565C0
+  BackgroundColor<<gateway>> #FFF3E0
+  BorderColor<<gateway>> #E65100
+  BackgroundColor<<auth>> #E8F5E9
+  BorderColor<<auth>> #2E7D32
+  BackgroundColor<<signing>> #F3E5F5
+  BorderColor<<signing>> #6A1B9A
+  BackgroundColor<<infra>> #ECEFF1
+  BorderColor<<infra>> #546E7A
+  BackgroundColor<<external>> #FFFFFF
+  BorderColor<<external>> #9E9E9E
+}
+skinparam component {
+  BackgroundColor #FFFFFF
+  BorderColor #90A4AE
+}
+skinparam database {
+  BackgroundColor #FFFFFF
+  BorderColor #546E7A
+}
+skinparam queue {
+  BackgroundColor #FFFFFF
+  BorderColor #546E7A
+}
+hide stereotype
+
+rectangle "Client Layer" <<client>> {
+  rectangle "Web Application\n(React + Vite)" <<client>> as WEB {
+    component "UI Views\n(Login, Accounts, Cards,\nTransfer, Security)" as WEB_UI
+    component "CryptoService\n(WebCrypto ECDSA P-256,\nnon-extractable key in IndexedDB)" as WEB_CRYPTO
+  }
+  rectangle "Mobile Application\n(React Native + Expo)" <<client>> as MOB {
+    component "UI Screens\n(Login, Accounts, Cards,\nTransfer, Security)" as MOB_UI
+    component "CryptoService\n(ECDSA P-256)" as MOB_CRYPTO
+  }
+}
+
+rectangle "API Gateway :8080\n(Spring Cloud Gateway)" <<gateway>> as GW_BOX {
+  component "Routing\n/api/v1/auth/**\n/api/v1/banking/**\n/api/v1/signing/verify" as GW_ROUTE
+  component "CORS Policy" as GW_CORS
+  component "Rate Limiter\n(per client IP)\nauth: 5 req/s\nbanking: 20 req/s" as GW_RL
+}
+
+rectangle "Auth & Banking Service :8081\n(Spring Boot)" <<auth>> as AUTH {
+  component "AuthController\n(login, OTP, register,\nlogout)" as AUTH_CTRL
+  component "SessionAuthInterceptor\n(X-Session-Token check)" as SESS_INT
+  component "BankingController\n(accounts, cards,\ntransfers, sessions)" as BANK_CTRL
+  component "BankingService\n(@Transactional,\nPESSIMISTIC_WRITE)" as BANK_SVC
+  component "OtpStore\n(120 s TTL, single use)" as OTP
+  component "SigningClient" as SIGN_CLIENT
+  component "NotificationPublisher" as PUB
+  component "NotificationConsumer\n+ EmailService" as CONS
+  component "Event Producers\n(audit events)" as EVT
+}
+
+rectangle "Signing Service :8083\n(Spring Boot)" <<signing>> as SIGN {
+  component "SigningController\n(enroll, verify)" as SIGN_CTRL
+  component "ECDSA Verifier\n(SHA256withECDSA)" as SIGN_VERIFY
+}
+
+rectangle "Infrastructure (Docker Compose)" <<infra>> as INFRA {
+  database "PostgreSQL\n:5432" as PG
+  database "Redis\n:6379" as REDIS
+  queue "RabbitMQ\n:5672\n(notificationQueue)" as RABBIT
+  queue "Apache Kafka\n:9092\n(audit topics)" as KAFKA
+}
+
+rectangle "SMTP Server" <<external>> as SMTP
+
+WEB_UI --> GW_ROUTE : HTTPS / REST
+MOB_UI --> GW_ROUTE : HTTPS / REST
+WEB_UI ..> WEB_CRYPTO : sign transfer
+MOB_UI ..> MOB_CRYPTO : sign transfer
+
+GW_RL ..> REDIS : request counters
+
+GW_ROUTE --> AUTH_CTRL : /api/v1/auth/**
+GW_ROUTE --> SESS_INT : /api/v1/banking/**
+GW_ROUTE --> SIGN_CTRL : /signing/verify
+
+SESS_INT --> BANK_CTRL : authenticated user
+BANK_CTRL --> SIGN_CLIENT : verify signature
+SIGN_CLIENT --> SIGN_CTRL : REST
+SIGN_CTRL --> SIGN_VERIFY
+BANK_CTRL --> BANK_SVC : transfer
+AUTH_CTRL --> OTP
+BANK_CTRL --> OTP
+OTP --> REDIS : SET / GET / DEL
+AUTH_CTRL --> PUB
+BANK_SVC --> PUB : after commit
+PUB --> RABBIT : publish
+RABBIT --> CONS : consume
+CONS --> SMTP : send email
+RABBIT -[hidden]-> SMTP
+AUTH_CTRL --> EVT
+BANK_SVC --> EVT
+EVT --> KAFKA
+
+AUTH_CTRL --> PG : users, sessions
+BANK_SVC --> PG : accounts, transactions
+SIGN_CTRL --> PG : user_public_keys
+
+@enduml

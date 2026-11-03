@@ -289,12 +289,26 @@ export default function App() {
     };
   }, [user, pendingTxn]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      const { logout } = await import('./src/api/authApi');
+      await logout();
+    } catch (e) { /* oturum zaten geçersiz olabilir */ }
     setUser(null);
     setActiveTab('overview');
     setFailedLoginInfo(null);
     import('./src/api/config').then(m => m.setAuthEmail(null));
   };
+
+  // Oturum başka bir cihazdan sonlandırılırsa sonraki API çağrısı 401 döner → giriş ekranına dön
+  useEffect(() => {
+    import('./src/api/config').then(m => m.onSessionExpired((msg) => {
+      setUser(null);
+      setActiveTab('overview');
+      m.setAuthEmail(null);
+      Alert.alert('Oturum Sonlandı', msg || 'Oturumunuz sonlandırıldı. Lütfen tekrar giriş yapınız.');
+    }));
+  }, []);
 
   const handleAuthSuccess = ({ email, userName, failedLoginInfo: fli }) => {
     setUser({ email, userName });

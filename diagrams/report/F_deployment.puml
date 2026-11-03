@@ -1,0 +1,89 @@
+@startuml F_Deployment
+' Appendix F – Deployment Diagram (docker-compose.yml)
+
+title TokerBank – Docker Compose Deployment
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 12
+skinparam shadowing false
+skinparam roundcorner 10
+skinparam nodesep 35
+skinparam ranksep 55
+skinparam ArrowColor #455A64
+skinparam ArrowFontSize 10
+skinparam ArrowFontColor #37474F
+skinparam node {
+  BackgroundColor #FFFFFF
+  BorderColor #546E7A
+}
+skinparam database {
+  BackgroundColor #ECEFF1
+  BorderColor #546E7A
+}
+skinparam queue {
+  BackgroundColor #ECEFF1
+  BorderColor #546E7A
+}
+skinparam rectangle {
+  BackgroundColor<<host>> #FAFAFA
+  BorderColor<<host>> #9E9E9E
+  BackgroundColor<<net>> #F1F8E9
+  BorderColor<<net>> #689F38
+}
+hide stereotype
+
+rectangle "Client Devices" <<host>> {
+  node "Web Browser\n(React + Vite build)" as BROWSER #E3F2FD
+  node "Mobile Device\n(Expo / React Native)" as MOBILE #E3F2FD
+}
+
+rectangle "Docker Host – docker compose up" <<host>> {
+  rectangle "Docker Network" <<net>> {
+
+    node "api-gateway\n<<eclipse-temurin:17-jre>>\n:8080" as GW #FFF3E0
+
+    node "auth-service\n<<eclipse-temurin:17-jre>>\n:8081" as AUTH #E8F5E9
+    node "signing-service\n<<eclipse-temurin:17-jre>>\n:8083" as SIGN #F3E5F5
+
+    database "postgres\n<<postgres:15-alpine>>\n:5432" as PG
+    database "redis\n<<redis:7-alpine>>\n:6379" as REDIS
+    queue "rabbitmq\n<<rabbitmq:3-management>>\n:5672 / :15672" as RABBIT
+    queue "kafka\n<<cp-kafka:7.5.0>>\n:9092" as KAFKA
+    node "zookeeper\n<<cp-zookeeper:7.5.0>>\n:2181" as ZK
+
+    node "prometheus\n:9090" as PROM
+    node "grafana\n:3000" as GRAF
+  }
+}
+
+node "SMTP Server\n(external)" as SMTP
+
+BROWSER --> GW : HTTP :8080
+MOBILE --> GW : HTTP :8080
+
+GW --> AUTH : AUTH_SERVICE_URL
+GW --> SIGN : SIGNING_SERVICE_URL
+GW ..> REDIS : rate-limit counters
+
+AUTH --> SIGN : signature verify / enroll
+AUTH --> PG : JDBC
+SIGN --> PG : JDBC
+AUTH --> REDIS : OTP (TTL 120 s)
+AUTH --> RABBIT : AMQP
+AUTH --> KAFKA : audit events
+KAFKA --> ZK
+AUTH --> SMTP : email (from consumer)
+
+PROM ..> GW : scrape /actuator/prometheus
+PROM ..> AUTH : scrape /actuator/prometheus
+GRAF --> PROM : data source
+
+note bottom of AUTH
+  Multi-stage Dockerfile:
+  maven:3.9-eclipse-temurin-17 → build JAR
+  eclipse-temurin:17-jre → run as non-root user
+  Secrets are injected from a local .env file.
+end note
+
+@enduml

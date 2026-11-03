@@ -2,10 +2,14 @@ package com.banking.auth.controller;
 
 import com.banking.auth.model.*;
 import com.banking.auth.repository.*;
+import com.banking.auth.event.SecurityAuditConsumer;
+import com.banking.auth.notification.NotificationMessage;
+import com.banking.auth.notification.NotificationPublisher;
+import com.banking.auth.security.SessionAuthInterceptor;
 import com.banking.auth.service.BankingService;
-import com.banking.auth.service.EmailService;
+import com.banking.auth.service.OtpStore;
+import com.banking.auth.service.SigningClient;
 import jakarta.annotation.PostConstruct;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -32,12 +36,10 @@ public class BankingController {
     private final TransactionRepository transactionRepository;
     private final BeneficiaryContactRepository contactRepository;
     private final SecuritySettingsRepository securitySettingsRepository;
-    private final EmailService emailService;
-    
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
-    private StringRedisTemplate redisTemplate;
-
-    private final java.util.Map<String, String> fallbackCache = new java.util.concurrent.ConcurrentHashMap<>();
+    private final NotificationPublisher notificationPublisher;
+    private final OtpStore otpStore;
+    private final SigningClient signingClient;
+    private final SecurityAuditConsumer securityAudit;
 
     public BankingController(BankingService bankingService,
                              UserRepository userRepository,
@@ -47,7 +49,10 @@ public class BankingController {
                              TransactionRepository transactionRepository,
                              BeneficiaryContactRepository contactRepository,
                              SecuritySettingsRepository securitySettingsRepository,
-                             EmailService emailService) {
+                             NotificationPublisher notificationPublisher,
+                             OtpStore otpStore,
+                             SigningClient signingClient,
+                             SecurityAuditConsumer securityAudit) {
         this.bankingService = bankingService;
         this.userRepository = userRepository;
         this.accountRepository = accountRepository;
@@ -56,25 +61,23 @@ public class BankingController {
         this.transactionRepository = transactionRepository;
         this.contactRepository = contactRepository;
         this.securitySettingsRepository = securitySettingsRepository;
-        this.emailService = emailService;
+        this.notificationPublisher = notificationPublisher;
+        this.otpStore = otpStore;
+        this.signingClient = signingClient;
+        this.securityAudit = securityAudit;
     }
 
-    // Demo için yardımcı metod (Authentication kapalı olduğu için)
-    // Güncelleme: Artık X-User-Email header'ından aktif kullanıcıyı okur.
+    // Oturum token'ı ile doğrulanmış kullanıcıyı döner (SessionAuthInterceptor tarafından set edilir)
     private synchronized UUID getDemoUserId() {
         org.springframework.web.context.request.ServletRequestAttributes attrs = 
             (org.springframework.web.context.request.ServletRequestAttributes) org.springframework.web.context.request.RequestContextHolder.getRequestAttributes();
-        String email = "toker2003@gmail.com";
-        if (attrs != null) {
-            String headerEmail = attrs.getRequest().getHeader("X-User-Email");
-            if (headerEmail != null && !headerEmail.isBlank()) {
-                email = headerEmail;
-            }
+        Object authUserId = attrs != null ? attrs.getRequest().getAttribute(SessionAuthInterceptor.AUTH_USER_ID) : null;
+        if (authUserId == null) {
+            throw new SecurityException("Doğrulanmış oturum bulunamadı.");
         }
-        
-        final String targetEmail = email;
-        User user = userRepository.findByEmail(targetEmail)
-                .orElseThrow(() -> new RuntimeException("Kullanıcı bulunamadı: " + targetEmail));
+
+        User user = userRepository.findById((UUID) authUserId)
+                .orElseThrow(() -> new RuntimeException("Kullanıcı bulunamadı: " + authUserId));
                 
         // Eğer yeni kullanıcıysa ve hesabı yoksa, varsayılan bir vadesiz hesap oluştur
         if (accountRepository.findByUserId(user.getId()).isEmpty()) {
@@ -91,6 +94,24 @@ public class BankingController {
         }
         
         return user.getId();
+    }
+
+    // --- POST /api/v1/banking/security/enroll-device ---
+    // Cihazın ECDSA P-256 açık anahtarını oturumdaki kullanıcı adına signing-service'e kaydeder.
+    // Kullanıcı kimliği istemciden değil oturumdan alındığı için başkası adına anahtar kaydedilemez.
+    @PostMapping("/security/enroll-device")
+    public ResponseEntity<Map<String, Object>> enrollDevice(@RequestBody Map<String, Object> req) {
+        String publicKey = (String) req.get("publicKey");
+        if (publicKey == null || publicKey.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "publicKey gereklidir."));
+        }
+        try {
+            signingClient.enroll(getDemoUserId(), publicKey, (String) req.get("deviceName"));
+            return ResponseEntity.ok(Map.of("success", true, "message", "Cihaz işlem imzalama için kaydedildi."));
+        } catch (Exception e) {
+            log.warn("Cihaz kaydı başarısız: {}", e.getMessage());
+            return ResponseEntity.status(503).body(Map.of("error", "İmza servisine ulaşılamadı."));
+        }
     }
 
     // --- GET /api/v1/banking/contacts ---
@@ -318,6 +339,7 @@ public class BankingController {
     // --- POST /api/v1/banking/transfers (ML Fraud Engine Risk Evaluation) ---
     @PostMapping("/transfers")
     public ResponseEntity<Map<String, Object>> processTransfer(@RequestBody Map<String, Object> transferReq) {
+        long startNanos = System.nanoTime();
         double amountDouble = Double.parseDouble(transferReq.getOrDefault("amount", 0).toString());
         BigDecimal amount = BigDecimal.valueOf(amountDouble);
         String recipientIban = (String) transferReq.getOrDefault("recipientIban", "TR000000000000000000000000");
@@ -354,32 +376,35 @@ public class BankingController {
         String deviceFingerprint = (String) transferReq.getOrDefault("fingerprint", "FP-UNKNOWN");
         String signature = (String) transferReq.get("signature");
 
-        if (signature != null) {
-            log.info("✍️ İşlem kriptografik imzası alındı, doğrulanıyor...");
-            try {
-                org.springframework.web.client.RestTemplate restTemplate = new org.springframework.web.client.RestTemplate();
-                
-                // JS ile birebir eşleşmesi için basit string formatı (Ondalık formatlamasından kaynaklı hash bozulmasını önlemek için amount string olarak alınır)
-                String amountStr = transferReq.get("amount").toString();
-                String payloadStr = "IBAN:" + recipientIban + ",AMOUNT:" + amountStr + ",DESC:" + description;
-                
-                Map<String, String> reqBody = new HashMap<>();
-                reqBody.put("userId", getDemoUserId().toString());
-                reqBody.put("payload", payloadStr);
-                reqBody.put("signature", signature);
-                
-                ResponseEntity<Map> res = restTemplate.postForEntity("http://localhost:8083/api/v1/signing/verify", reqBody, Map.class);
-                if (res.getStatusCode().is2xxSuccessful()) {
-                    log.info("✅ Kriptografik imza doğrulandı!");
-                } else {
-                    return ResponseEntity.badRequest().body(Map.of("error", "Geçersiz kriptografik imza!"));
-                }
-            } catch (Exception e) {
-                log.warn("⚠️ Kriptografik imza doğrulama hatası (Servis kapalı olabilir): {}", e.getMessage());
-                // Güvenlik gereği imza doğrulanamazsa işlemi blokla
-                return ResponseEntity.badRequest().body(Map.of("error", "Kriptografik imza servisi yanıt vermiyor. İşlem reddedildi."));
-            }
+        // --- Transaction Signing: imza zorunlu, bakiye değişmeden ÖNCE doğrulanır ---
+        UUID userId = getDemoUserId();
+        String userEmail = userRepository.findById(userId).map(User::getEmail).orElse(null);
+        if (signature == null || signature.isBlank()) {
+            securityAudit.logEvent(userEmail, "SIGNATURE_MISSING", "WARN", ipAddress, deviceFingerprint,
+                "{\"iban\": \"" + recipientIban + "\", \"amount\": \"" + transferReq.get("amount") + "\"}");
+            return ResponseEntity.status(403).body(Map.of(
+                "error", "İşlem imzası zorunludur. Lütfen cihazınızı kaydedip tekrar deneyiniz.",
+                "signatureRequired", true));
         }
+
+        // Kanonik veri sunucuda istek alanlarından yeniden üretilir: imzadan sonra yapılan her değişiklik imzayı bozar
+        String payloadStr = SigningClient.canonicalTransferPayload(
+            recipientIban, transferReq.get("amount"), transferReq.get("description"));
+        SigningClient.Result verification = signingClient.verify(userId, payloadStr, signature);
+
+        if (verification == SigningClient.Result.UNAVAILABLE) {
+            log.warn("⚠️ İmza servisi yanıt vermiyor, işlem reddedildi.");
+            return ResponseEntity.status(503).body(Map.of("error", "Kriptografik imza servisi yanıt vermiyor. İşlem reddedildi."));
+        }
+        if (verification == SigningClient.Result.INVALID) {
+            log.warn("❌ Geçersiz ECDSA imzası! Payload: {}", payloadStr);
+            securityAudit.logEvent(userEmail, "SIGNATURE_INVALID", "CRITICAL", ipAddress, deviceFingerprint,
+                "{\"payload\": \"" + payloadStr.replace("\"", "'") + "\"}");
+            return ResponseEntity.status(403).body(Map.of(
+                "error", "Geçersiz kriptografik imza: işlem verisi değiştirilmiş olabilir. İşlem reddedildi.",
+                "signatureValid", false));
+        }
+        log.info("✅ ECDSA P-256 imzası doğrulandı.");
 
         try {
             // ML Fraud Engine destekli transfer işlemi
@@ -388,6 +413,8 @@ public class BankingController {
             );
 
             String status = txn.getStatus();
+            long processingMs = (System.nanoTime() - startNanos) / 1_000_000;
+            log.info("⏱️ Transfer backend işlem süresi: {} ms (status={})", processingMs, status);
 
             // Push Onayı Gerekiyor (Medium/High Risk)
             if ("PUSH_CHALLENGED".equals(status)) {
@@ -424,6 +451,7 @@ public class BankingController {
 
             // Güvenli işlem (RiskLevel: LOW/SAFE)
             return ResponseEntity.ok(Map.of(
+                "processingTimeMs", processingMs,
                 "status", "COMPLETED",
                 "riskLevel", txn.getRiskLevel(),
                 "riskScore", txn.getRiskScore(),
@@ -527,21 +555,18 @@ public class BankingController {
         String otp = (String) req.getOrDefault("otp", "");
         String transactionIdStr = (String) req.get("transactionId");
         
-        if ("123456".equals(otp.trim()) || (otp != null && otp.trim().length() == 6)) {
-            try {
-                UUID txId = UUID.fromString(transactionIdStr);
-                Transaction txn = bankingService.completeChallengedTransfer(txId, getDemoUserId());
-                
-                return ResponseEntity.ok(Map.of(
-                    "success", true,
-                    "status", "COMPLETED",
-                    "message", "Güvenlik OTP kodu doğrulandı! İşleminiz güvenle alıcıya iletildi."
-                ));
-            } catch (Exception e) {
-                 return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-            }
+        try {
+            UUID txId = UUID.fromString(transactionIdStr);
+            bankingService.completeChallengedTransfer(txId, getDemoUserId(), otp);
+
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "status", "COMPLETED",
+                "message", "Güvenlik OTP kodu doğrulandı! İşleminiz güvenle alıcıya iletildi."
+            ));
+        } catch (Exception e) {
+             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
-        return ResponseEntity.badRequest().body(Map.of("error", "Geçersiz OTP kodu."));
     }
 
     // --- GET /api/v1/banking/transfers/status/{transactionId} ---
@@ -672,6 +697,7 @@ public class BankingController {
                 if (s.getUser().getId().equals(getDemoUserId())) {
                     s.setActive(false);
                     sessionRepository.save(s);
+                    securityAudit.logSessionTerminated(s.getUser().getEmail(), sessionId.toString(), s.getIpAddress());
                 }
             });
         }
@@ -786,18 +812,13 @@ public class BankingController {
         }
 
         // Generate OTP
-        String otpCode = String.format("%06d", new java.util.Random().nextInt(999999));
+        String otpCode = String.format("%06d", new java.security.SecureRandom().nextInt(1_000_000));
         
-        // Save OTP and requested limit in Redis
-        if (redisTemplate != null) {
-            redisTemplate.opsForValue().set("LIMIT_OTP:" + email, otpCode, java.time.Duration.ofMinutes(3));
-            redisTemplate.opsForValue().set("LIMIT_REQ:" + email, newLimit.toString(), java.time.Duration.ofMinutes(3));
-        } else {
-            fallbackCache.put("LIMIT_OTP:" + email, otpCode);
-            fallbackCache.put("LIMIT_REQ:" + email, newLimit.toString());
-        }
+        // Save OTP and requested limit in Redis (TTL ile)
+        otpStore.put("LIMIT_OTP:" + email, otpCode, OtpStore.OTP_TTL);
+        otpStore.put("LIMIT_REQ:" + email, newLimit.toString(), OtpStore.OTP_TTL);
 
-        emailService.sendOtpEmail(email, otpCode, "limit_increase");
+        notificationPublisher.publish(NotificationMessage.otp(email, otpCode, "limit_increase"));
         
         return ResponseEntity.ok(Map.of("message", "Limit artırımı için doğrulama kodu gönderildi."));
     }
@@ -814,23 +835,11 @@ public class BankingController {
             return ResponseEntity.badRequest().body(Map.of("error", "OTP gerekli."));
         }
         
-        String cachedOtp;
-        if (redisTemplate != null) {
-            cachedOtp = redisTemplate.opsForValue().get("LIMIT_OTP:" + email);
-        } else {
-            cachedOtp = fallbackCache.get("LIMIT_OTP:" + email);
-        }
-        
-        if (cachedOtp == null || !cachedOtp.equals(otp)) {
+        if (!otpStore.verifyAndConsume("LIMIT_OTP:" + email, otp)) {
             return ResponseEntity.badRequest().body(Map.of("error", "Geçersiz veya süresi dolmuş OTP."));
         }
         
-        String requestedLimitStr;
-        if (redisTemplate != null) {
-            requestedLimitStr = redisTemplate.opsForValue().get("LIMIT_REQ:" + email);
-        } else {
-            requestedLimitStr = fallbackCache.get("LIMIT_REQ:" + email);
-        }
+        String requestedLimitStr = otpStore.get("LIMIT_REQ:" + email);
         
         if (requestedLimitStr == null) {
             return ResponseEntity.badRequest().body(Map.of("error", "Kayıtlı limit artırım talebi bulunamadı."));
@@ -841,14 +850,7 @@ public class BankingController {
         settings.setDailyTransferLimit(new BigDecimal(requestedLimitStr));
         securitySettingsRepository.save(settings);
         
-        // Clear Redis
-        if (redisTemplate != null) {
-            redisTemplate.delete("LIMIT_OTP:" + email);
-            redisTemplate.delete("LIMIT_REQ:" + email);
-        } else {
-            fallbackCache.remove("LIMIT_OTP:" + email);
-            fallbackCache.remove("LIMIT_REQ:" + email);
-        }
+        otpStore.delete("LIMIT_REQ:" + email);
         
         return ResponseEntity.ok(Map.of("message", "Günlük işlem limitiniz başarıyla güncellendi."));
     }

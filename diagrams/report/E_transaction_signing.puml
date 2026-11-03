@@ -1,0 +1,108 @@
+@startuml E_Transaction_Signing
+' Appendix E – Transaction Signing Flow (Device Enrollment + Signature Verification)
+
+title TokerBank – Transaction Signing with ECDSA P-256
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 12
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam sequence {
+  ArrowColor #455A64
+  LifeLineBorderColor #90A4AE
+  ParticipantBorderColor #546E7A
+  ParticipantBackgroundColor #FFFFFF
+  GroupBorderColor #90A4AE
+  GroupBackgroundColor #F5F5F5
+}
+skinparam database {
+  BackgroundColor #ECEFF1
+  BorderColor #546E7A
+}
+skinparam queue {
+  BackgroundColor #ECEFF1
+  BorderColor #546E7A
+}
+skinparam actor {
+  BackgroundColor #FFFFFF
+  BorderColor #546E7A
+}
+skinparam note {
+  BackgroundColor #FFFDE7
+  BorderColor #F9A825
+}
+autonumber "<b>0."
+
+actor "User" as U
+participant "Client\n(WebCrypto / Mobile)" as C #E3F2FD
+database "IndexedDB\n(device)" as IDB
+participant "API Gateway\n:8080" as GW #FFF3E0
+participant "BankingController\n+ SessionAuthInterceptor" as B #E8F5E9
+participant "BankingService" as BS #E8F5E9
+participant "Signing Service\n:8083" as S #F3E5F5
+database "PostgreSQL" as PG
+queue "RabbitMQ" as MQ
+
+== Phase 1: Device Enrollment (after login) ==
+C -> C : generateKey(ECDSA, P-256,\n**extractable = false**)
+C -> IDB : store private CryptoKey
+note right of IDB
+  The private key can be used for
+  signing but its bytes can never
+  be exported, even by JavaScript.
+end note
+C -> C : export public key (SPKI / PEM)
+C -> GW : POST /api/v1/banking/security/enroll-device\n{ publicKey, deviceName } + X-Session-Token
+GW -> B : forward
+B -> B : resolve userId from session token
+B -> S : enroll(userId, publicKey, deviceName)
+S -> PG : upsert user_public_keys\n(one key per device)
+S --> B : 200 enrolled
+B --> C : 200 device enrolled
+
+== Phase 2: Signing a Transfer ==
+U -> C : enter IBAN, amount, description\nand confirm
+C -> C : payload =\n"IBAN:<iban>,AMOUNT:<amount>,DESC:<desc>"
+C -> IDB : load private CryptoKey
+C -> C : signature = sign(SHA-256 / ECDSA, payload)
+C -> GW : POST /api/v1/banking/transfers\n{ iban, amount, description, signature }
+GW -> B : forward (rate limit 20 req/s)
+
+== Phase 3: Server-Side Verification ==
+B -> B : validate session token → userId
+
+alt signature missing
+  B -> PG : audit log SIGNATURE_MISSING
+  B --> C : 403 Signature required
+else signature present
+  B -> B : rebuild canonical payload\n**from the request fields**
+  B -> S : verify(userId, payload, signature)
+  S -> PG : load public keys of user
+  S -> S : SHA256withECDSA verify\n(against each enrolled device key)
+
+  alt signature invalid (data changed after signing)
+    S --> B : 4xx invalid
+    B -> PG : audit log SIGNATURE_INVALID (CRITICAL)
+    B --> C : 403 Transaction rejected
+  else signature valid
+    S --> B : 200 valid
+    B -> BS : processTransfer(...)
+    BS -> PG : SELECT ... FOR UPDATE\n(PESSIMISTIC_WRITE lock on source account)
+    BS -> BS : check ownership, amount,\nbalance, daily limit
+    BS -> PG : update balance + insert transaction
+    BS -> PG : COMMIT (lock released)
+    BS ->> MQ : publish transfer receipt\n(after commit)
+    BS --> B : COMPLETED
+    B --> C : 200 { referenceId, processingTimeMs }
+    C -> U : show receipt
+  end
+end
+
+note over B, S
+  The server never trusts a payload sent by the client.
+  Changing the IBAN, amount (even by 0.01 TL) or description
+  after signing produces a different payload, so verification fails.
+end note
+
+@enduml

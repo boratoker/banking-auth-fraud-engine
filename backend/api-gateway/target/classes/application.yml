@@ -25,25 +25,55 @@ spring:
               - DELETE
               - OPTIONS
             allowedHeaders: "*"
+            exposedHeaders:
+              - X-RateLimit-Remaining
             allowCredentials: true
       routes:
-        # Auth Service Route & Rate Limiter Configuration
-        - id: auth-service
-          uri: http://localhost:8081
+        # Kimlik doğrulama uç noktaları: brute-force / credential stuffing'e karşı sıkı limit
+        - id: auth-service-auth
+          uri: ${AUTH_SERVICE_URL:http://localhost:8081}
           predicates:
-            - Path=/api/v1/auth/**, /api/v1/banking/**
+            - Path=/api/v1/auth/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@ipKeyResolver}"
+                redis-rate-limiter.replenishRate: 5
+                redis-rate-limiter.burstCapacity: 10
+                redis-rate-limiter.requestedTokens: 1
+
+        # Bankacılık uç noktaları
+        - id: auth-service-banking
+          uri: ${AUTH_SERVICE_URL:http://localhost:8081}
+          predicates:
+            - Path=/api/v1/banking/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@ipKeyResolver}"
+                redis-rate-limiter.replenishRate: 20
+                redis-rate-limiter.burstCapacity: 40
+                redis-rate-limiter.requestedTokens: 1
 
         # Fraud Service Route Configuration
         - id: fraud-service
-          uri: http://localhost:8082
+          uri: ${FRAUD_SERVICE_URL:http://localhost:8082}
           predicates:
             - Path=/api/v1/fraud/**
 
-        # Signing Service Route Configuration
+        # Signing Service: dışarıya yalnızca doğrulama açıktır. Cihaz kaydı (enroll) oturum
+        # doğrulaması gerektirdiği için auth-service üzerinden (/api/v1/banking/security/enroll-device) yapılır.
         - id: signing-service
-          uri: http://localhost:8083
+          uri: ${SIGNING_SERVICE_URL:http://localhost:8083}
           predicates:
-            - Path=/api/v1/signing/**
+            - Path=/api/v1/signing/verify
+          filters:
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@ipKeyResolver}"
+                redis-rate-limiter.replenishRate: 10
+                redis-rate-limiter.burstCapacity: 20
+                redis-rate-limiter.requestedTokens: 1
 
 # Prometheus & Actuator Metrics Config
 management:

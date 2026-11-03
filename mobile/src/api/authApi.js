@@ -36,6 +36,11 @@ export const verifyOtp = async (email, otp, mode) => {
   });
 };
 
-export const enrollDevice = async (userId, publicKey, deviceName) => {
-  return await apiClient.post(`/api/v1/signing/enroll`, { userId, publicKey, deviceName });
+// Cihaz kaydı oturumdaki kullanıcı adına yapılır (userId istemciden alınmaz)
+export const enrollDevice = async (publicKey, deviceName) => {
+  return await apiClient.post(`/api/v1/banking/security/enroll-device`, { publicKey, deviceName });
+};
+
+export const logout = async () => {
+  return await apiClient.post(`${AUTH_PREFIX}/logout`);
 };

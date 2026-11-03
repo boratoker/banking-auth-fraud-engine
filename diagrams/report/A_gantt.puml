@@ -1,0 +1,84 @@
+@startgantt A_Gantt
+' Appendix A – Project Plan (based on the daily work summary, 01.09.2026 – 28.09.2026)
+
+title TokerBank – Internship Project Plan (September 2026)
+Project starts 2026-09-01
+saturday are closed
+sunday are closed
+printscale daily zoom 2
+hide footbox
+
+<style>
+ganttDiagram {
+  FontName Helvetica
+  task {
+    FontSize 12
+    BackgroundColor #90CAF9
+    LineColor #1565C0
+  }
+  milestone {
+    BackgroundColor #E65100
+    LineColor #BF360C
+  }
+  separator {
+    FontSize 12
+    FontStyle bold
+    BackgroundColor #ECEFF1
+  }
+  timeline {
+    BackgroundColor #FAFAFA
+  }
+}
+</style>
+
+-- Phase 1: Onboarding & Planning --
+[Onboarding & Environment Setup] starts 2026-09-01 and lasts 1 day
+[Requirements & Project Definition] starts 2026-09-02 and lasts 1 day
+[Gantt, Architecture & Sequence Diagrams] starts 2026-09-03 and lasts 1 day
+[Onboarding & Environment Setup] is colored in #CFD8DC/#546E7A
+[Requirements & Project Definition] is colored in #CFD8DC/#546E7A
+[Gantt, Architecture & Sequence Diagrams] is colored in #CFD8DC/#546E7A
+
+-- Phase 2: Client Interfaces & Gateway --
+[Web Frontend (React + Vite) & API Gateway] starts 2026-09-07 and lasts 1 day
+[Mobile Frontend (React Native + Expo)] starts 2026-09-08 and lasts 1 day
+[Web Frontend (React + Vite) & API Gateway] is colored in #BBDEFB/#1565C0
+[Mobile Frontend (React Native + Expo)] is colored in #BBDEFB/#1565C0
+
+-- Phase 3: Core Banking & Authentication --
+[Database Schema & ER Diagram (PostgreSQL)] starts 2026-09-09 and lasts 1 day
+[Transfers, Accounts & Event Handling] starts 2026-09-10 and lasts 1 day
+[Email OTP & Redis Integration] starts 2026-09-11 and lasts 1 day
+[Database Schema & ER Diagram (PostgreSQL)] is colored in #C8E6C9/#2E7D32
+[Transfers, Accounts & Event Handling] is colored in #C8E6C9/#2E7D32
+[Email OTP & Redis Integration] is colored in #C8E6C9/#2E7D32
+
+-- Phase 4: Transaction Signing (ECDSA P-256) --
+[Signing Architecture Design] starts 2026-09-14 and lasts 1 day
+[WebCrypto Key Pair Generation] starts 2026-09-15 and lasts 1 day
+[Device Enrollment API] starts 2026-09-16 and lasts 1 day
+[Client-Side Transaction Signing] starts 2026-09-17 and lasts 1 day
+[Backend Signature Verification] starts 2026-09-21 and lasts 1 day
+[End-to-End Signing Tests] starts 2026-09-22 and lasts 1 day
+[Signing Architecture Design] is colored in #E1BEE7/#6A1B9A
+[WebCrypto Key Pair Generation] is colored in #E1BEE7/#6A1B9A
+[Device Enrollment API] is colored in #E1BEE7/#6A1B9A
+[Client-Side Transaction Signing] is colored in #E1BEE7/#6A1B9A
+[Backend Signature Verification] is colored in #E1BEE7/#6A1B9A
+[End-to-End Signing Tests] is colored in #E1BEE7/#6A1B9A
+
+-- Phase 5: Deployment & Finalization --
+[Monitoring (Prometheus + Grafana)] starts 2026-09-23 and lasts 1 day
+[Containerization (Docker Compose)] starts 2026-09-24 and lasts 1 day
+[Unit Tests, Polishing & Demo Preparation] starts 2026-09-25 and lasts 1 day
+[Monitoring (Prometheus + Grafana)] is colored in #FFE0B2/#E65100
+[Containerization (Docker Compose)] is colored in #FFE0B2/#E65100
+[Unit Tests, Polishing & Demo Preparation] is colored in #FFE0B2/#E65100
+
+-- Reviews --
+[Architecture Approval] happens 2026-09-04
+[Progress Review 1] happens 2026-09-11
+[Progress Review 2] happens 2026-09-18
+[Final Presentation & Live Demo] happens 2026-09-28
+
+@endgantt

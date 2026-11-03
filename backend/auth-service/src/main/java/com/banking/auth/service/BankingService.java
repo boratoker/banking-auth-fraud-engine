@@ -7,13 +7,14 @@ import com.banking.auth.model.FraudEvaluation;
 import com.banking.auth.model.Transaction;
 import com.banking.auth.model.User;
 import com.banking.auth.model.UserSecuritySettings;
+import com.banking.auth.notification.NotificationMessage;
+import com.banking.auth.notification.NotificationPublisher;
 import com.banking.auth.repository.AccountRepository;
 import com.banking.auth.repository.SecuritySettingsRepository;
 import com.banking.auth.repository.TransactionRepository;
 import com.banking.auth.repository.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,12 +39,8 @@ public class BankingService {
     private final SecuritySettingsRepository securitySettingsRepository;
     private final BankingEventProducer eventProducer;
     private final MlFraudInferenceEngine fraudEngine;
-    private final EmailService emailService;
-    
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
-    private StringRedisTemplate redisTemplate;
-
-    private final java.util.Map<String, String> alertFallbackMap = new java.util.concurrent.ConcurrentHashMap<>();
+    private final NotificationPublisher notificationPublisher;
+    private final OtpStore otpStore;
 
     public BankingService(AccountRepository accountRepository,
                           TransactionRepository transactionRepository,
@@ -51,14 +48,16 @@ public class BankingService {
                           SecuritySettingsRepository securitySettingsRepository,
                           BankingEventProducer eventProducer,
                           MlFraudInferenceEngine fraudEngine,
-                          EmailService emailService) {
+                          NotificationPublisher notificationPublisher,
+                          OtpStore otpStore) {
         this.accountRepository = accountRepository;
         this.transactionRepository = transactionRepository;
         this.userRepository = userRepository;
         this.securitySettingsRepository = securitySettingsRepository;
         this.eventProducer = eventProducer;
         this.fraudEngine = fraudEngine;
-        this.emailService = emailService;
+        this.notificationPublisher = notificationPublisher;
+        this.otpStore = otpStore;
     }
 
     /**
@@ -217,8 +216,9 @@ public class BankingService {
             txn.setStatus("OTP_CHALLENGED");
             transactionRepository.save(txn);
             
-            String otpCode = String.format("%06d", new java.util.Random().nextInt(999999));
-            emailService.sendOtpEmail(txn.getUser().getEmail(), otpCode, "transfer");
+            String otpCode = String.format("%06d", new java.security.SecureRandom().nextInt(1_000_000));
+            otpStore.put(transferOtpKey(txn.getId()), otpCode, OtpStore.OTP_TTL);
+            notificationPublisher.publish(NotificationMessage.otp(txn.getUser().getEmail(), otpCode, "transfer"));
             log.info("🔴➡️ Critical Push onaylandı, OTP gönderildi. Txn: {}", txn.getReferenceId());
             return txn;
         }
@@ -230,7 +230,7 @@ public class BankingService {
      * OTP doğrulandıktan sonra işlemi tamamlar (Critical akışının 2. aşaması).
      */
     @Transactional
-    public Transaction completeChallengedTransfer(UUID transactionId, UUID userId) {
+    public Transaction completeChallengedTransfer(UUID transactionId, UUID userId, String otp) {
         Transaction txn = transactionRepository.findById(transactionId)
             .orElseThrow(() -> new IllegalArgumentException("İşlem bulunamadı."));
 
@@ -240,6 +240,11 @@ public class BankingService {
 
         if (!"OTP_CHALLENGED".equals(txn.getStatus())) {
             throw new IllegalStateException("Bu işlem OTP onay bekleyen durumda değil.");
+        }
+
+        // OTP 120 sn geçerli ve tek kullanımlık
+        if (!otpStore.verifyAndConsume(transferOtpKey(transactionId), otp)) {
+            throw new IllegalArgumentException("Geçersiz veya süresi dolmuş OTP kodu.");
         }
 
         Account sourceAccount = accountRepository.findByIdForUpdate(txn.getSourceAccount().getId())
@@ -312,32 +317,31 @@ public class BankingService {
         });
 
         eventProducer.publishTransferCompleted(txn.getReferenceId(), amountToSubtract);
+        notificationPublisher.publish(NotificationMessage.forTransaction(
+            NotificationMessage.Type.TRANSFER_RECEIPT, txn.getUser().getEmail(), txn));
         log.info("💸 Transfer tamamlandı. Txn: {}, Tutar: {}", txn.getReferenceId(), amountToSubtract);
 
         // Yüksek veya Kritik Riskliyse E-posta ve Mobil Push Bildirimi Gönder
         if ("HIGH".equals(txn.getRiskLevel()) || "CRITICAL".equals(txn.getRiskLevel())) {
             // E-posta Bildirimi
-            emailService.sendFraudAlertEmail(txn.getUser().getEmail(), txn);
+            notificationPublisher.publish(NotificationMessage.forTransaction(
+                NotificationMessage.Type.FRAUD_ALERT, txn.getUser().getEmail(), txn));
             
             // Mobil Push Bildirimi (Redis üzerinden simüle ediliyor, mobile app poll edecek)
             String alertMessage = String.format("DİKKAT: Hesabınızdan %s %s tutarında riskli bir transfer gerçekleşti.", 
                                                 amountToSubtract.toString(), txn.getCurrency());
-            if (redisTemplate != null) {
-                redisTemplate.opsForValue().set("PENDING_ALERT:" + txn.getUser().getEmail(), alertMessage, java.time.Duration.ofMinutes(5));
-            } else {
-                alertFallbackMap.put("PENDING_ALERT:" + txn.getUser().getEmail(), alertMessage);
-            }
+            otpStore.put("PENDING_ALERT:" + txn.getUser().getEmail(), alertMessage, java.time.Duration.ofMinutes(5));
         }
     }
     
     public String popPendingAlert(String email) {
         String key = "PENDING_ALERT:" + email;
-        if (redisTemplate != null) {
-            String alert = redisTemplate.opsForValue().get(key);
-            if (alert != null) redisTemplate.delete(key);
-            return alert;
-        } else {
-            return alertFallbackMap.remove(key);
-        }
+        String alert = otpStore.get(key);
+        if (alert != null) otpStore.delete(key);
+        return alert;
+    }
+
+    private static String transferOtpKey(UUID transactionId) {
+        return "TXN_OTP:" + transactionId;
     }
 }

@@ -3,7 +3,8 @@ import { getTransactions } from '../api/bankingApi';
 import tokerbankLogo from '../assets/tokerbank-logo.png';
 import { normalizeTurkish } from '../utils/textUtils';
 import { RiskBadge, getRiskBadgeInfo, parseRiskScore } from '../utils/riskUtils';
-import { enrollDevice, verifySignature } from '../api/signingApi';
+import { verifySignature } from '../api/signingApi';
+import { enrollDevicePublicKey } from '../api/bankingApi';
 import { generateAndEnrollKeyPair, hasEnrolledKey, signPayload } from '../utils/CryptoService';
 
 const TransactionsView = ({ initialSearchTerm = '' }) => {
@@ -20,7 +21,7 @@ const TransactionsView = ({ initialSearchTerm = '' }) => {
   const [signingLog, setSigningLog] = useState([]);
 
   useEffect(() => {
-    setIsEnrolled(hasEnrolledKey());
+    hasEnrolledKey().then(setIsEnrolled);
   }, []);
 
   useEffect(() => {
@@ -63,7 +64,7 @@ const TransactionsView = ({ initialSearchTerm = '' }) => {
 
       const result = await generateAndEnrollKeyPair();
       if (result.success) {
-        await enrollDevice(user.id, result.publicKey, "Web Tarayıcı");
+        await enrollDevicePublicKey(result.publicKey, "Web Tarayıcı");
         setIsEnrolled(true);
         alert("Cihazınız kriptografik işlem imzalama (WebCrypto) için başarıyla kaydedildi!");
       } else {

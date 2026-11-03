@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { submitTransfer, verifyTransferOtp, getContacts, getTransferStatus, getAccounts } from '../api/bankingApi';
 import tokerbankLogo from '../assets/tokerbank-logo.png';
 import { RiskBadge } from '../utils/riskUtils';
-import { hasEnrolledKey, signPayload } from '../utils/CryptoService';
+import { buildTransferPayload, ensureDeviceEnrolled, hasEnrolledKey, signPayload } from '../utils/CryptoService';
 
 const TransferView = ({ initialRecipient = '', initialIban = '' }) => {
   const [recipientIban, setRecipientIban] = useState(initialIban || '');
@@ -96,21 +96,19 @@ const TransferView = ({ initialRecipient = '', initialIban = '' }) => {
     const numericAmount = parseFloat(amount);
 
     try {
-      let signature = null;
-
-      // Kriptografik İmza (Transaction Signing) Akışı
-      if (hasEnrolledKey()) {
-        const rawPayload = `IBAN:${recipientIban},AMOUNT:${numericAmount},DESC:${description}`;
-        const signRes = await signPayload(rawPayload);
-        if (signRes.success) {
-          signature = signRes.signature;
-          console.log("İşlem WebCrypto ile imzalandı!");
-        } else {
-          setErrorMsg("İmzalama hatası: " + signRes.error);
-          setLoading(false);
-          return;
-        }
+      // Kriptografik İmza (Transaction Signing) Akışı — her transfer imzalanmak zorunda
+      if (!(await hasEnrolledKey())) {
+        await ensureDeviceEnrolled('Web Tarayıcı');
       }
+      const rawPayload = buildTransferPayload(recipientIban, numericAmount, description);
+      const signRes = await signPayload(rawPayload);
+      if (!signRes.success) {
+        setErrorMsg("İmzalama hatası: " + signRes.error);
+        setLoading(false);
+        return;
+      }
+      const signature = signRes.signature;
+      console.log("İşlem WebCrypto (ECDSA P-256) ile imzalandı!");
 
       const res = await submitTransfer({
         selectedAccount,
@@ -118,7 +116,7 @@ const TransferView = ({ initialRecipient = '', initialIban = '' }) => {
         recipientName,
         amount: numericAmount,
         description,
-        signature // Kriptografik imzayı (varsa) gönder
+        signature // ECDSA imzası (zorunlu)
       });
 
       setLoading(false);

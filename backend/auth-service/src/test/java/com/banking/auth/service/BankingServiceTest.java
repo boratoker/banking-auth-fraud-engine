@@ -7,6 +7,7 @@ import com.banking.auth.model.FraudEvaluation;
 import com.banking.auth.model.Transaction;
 import com.banking.auth.model.User;
 import com.banking.auth.model.UserSecuritySettings;
+import com.banking.auth.notification.NotificationPublisher;
 import com.banking.auth.repository.AccountRepository;
 import com.banking.auth.repository.SecuritySettingsRepository;
 import com.banking.auth.repository.TransactionRepository;
@@ -51,7 +52,10 @@ class BankingServiceTest {
     private MlFraudInferenceEngine fraudEngine;
 
     @Mock
-    private EmailService emailService;
+    private NotificationPublisher notificationPublisher;
+
+    @Mock
+    private OtpStore otpStore;
 
     @InjectMocks
     private BankingService bankingService;
@@ -177,5 +181,32 @@ class BankingServiceTest {
 
         assertTrue(exception.getMessage().contains("Günlük transfer limitinizi aşıyorsunuz"));
         verify(transactionRepository, never()).save(any());
+    }
+
+    @Test
+    void testCompleteChallengedTransfer_WrongOtp_Rejected() {
+        Transaction txn = new Transaction();
+        txn.setId(UUID.randomUUID());
+        txn.setUser(mockUser);
+        txn.setSourceAccount(mockAccount);
+        txn.setStatus("OTP_CHALLENGED");
+        txn.setAmount(new BigDecimal("-100.00"));
+        when(transactionRepository.findById(txn.getId())).thenReturn(Optional.of(txn));
+        when(otpStore.verifyAndConsume(anyString(), eq("000000"))).thenReturn(false);
+
+        Exception exception = assertThrows(IllegalArgumentException.class, () ->
+            bankingService.completeChallengedTransfer(txn.getId(), userId, "000000"));
+
+        assertEquals("Geçersiz veya süresi dolmuş OTP kodu.", exception.getMessage());
+        verify(accountRepository, never()).save(any());
+    }
+
+    @Test
+    void testCanonicalPayload_TamperedAmountChangesSignedData() {
+        String signed = SigningClient.canonicalTransferPayload("TR001", 100.5, "Kira");
+        assertEquals("IBAN:TR001,AMOUNT:100.5,DESC:Kira", signed);
+        assertEquals("IBAN:TR001,AMOUNT:100,DESC:", SigningClient.canonicalTransferPayload("TR001", 100, null));
+        // 1 kuruşluk değişiklik bile imzalanan metni değiştirir
+        assertNotEquals(signed, SigningClient.canonicalTransferPayload("TR001", 100.51, "Kira"));
     }
 }

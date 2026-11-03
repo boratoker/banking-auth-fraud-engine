@@ -1,6 +1,6 @@
 import apiClient from './config';
 import { getDeviceFingerprint, getIpAddress } from '../utils/DeviceUtils';
-import { signPayload } from '../utils/CryptoService';
+import { buildTransferPayload, signPayload } from '../utils/CryptoService';
 
 const BANKING_PREFIX = '/api/v1/banking';
 
@@ -37,14 +37,18 @@ export const addDevBalance = async (amount) => {
 };
 
 export const submitTransfer = async (transferData) => {
-  const payloadString = JSON.stringify(transferData);
+  // Backend'in yeniden ürettiği kanonik veri imzalanır (IBAN, tutar, açıklama)
+  const payloadString = buildTransferPayload(transferData.recipientIban, transferData.amount, transferData.description);
   const signatureRes = await signPayload(payloadString);
+  if (!signatureRes.success) {
+    throw new Error('İşlem imzalanamadı: ' + signatureRes.error);
+  }
   const fingerprint = await getDeviceFingerprint();
   const ipAddress = await getIpAddress();
 
   const dataWithSecurity = {
     ...transferData,
-    signature: signatureRes.success ? signatureRes.signature : null,
+    signature: signatureRes.signature,
     fingerprint,
     ipAddress
   };

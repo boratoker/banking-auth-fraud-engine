@@ -35,6 +35,27 @@ export const generateAndEnrollKeyPair = async () => {
   }
 };
 
+/**
+ * İmzalanan kanonik transfer verisi; backend'deki SigningClient.canonicalTransferPayload ile birebir aynı.
+ */
+export const buildTransferPayload = (recipientIban, amount, description) =>
+  `IBAN:${recipientIban},AMOUNT:${String(Number(amount))},DESC:${description ?? ''}`;
+
+const toSpkiPem = (keyPair) => {
+  const spkiPrefixHex = '3059301306072a8648ce3d020106082a8648ce3d030107034200';
+  const pubKeyBase64 = Buffer.from(spkiPrefixHex + keyPair.getPublic('hex'), 'hex').toString('base64');
+  return `-----BEGIN PUBLIC KEY-----\n${pubKeyBase64}\n-----END PUBLIC KEY-----`;
+};
+
+/** SecureStore'daki anahtarın açık anahtarını döner; anahtar yoksa yenisini üretir. */
+export const getOrCreatePublicKey = async () => {
+  const privKeyHex = await SecureStore.getItemAsync(KEY_NAME);
+  if (privKeyHex) {
+    return { publicKey: toSpkiPem(ec.keyFromPrivate(privKeyHex, 'hex')), success: true };
+  }
+  return generateAndEnrollKeyPair();
+};
+
 export const hasEnrolledKey = async () => {
   const key = await SecureStore.getItemAsync(KEY_NAME);
   return !!key;
@@ -53,8 +74,12 @@ export const signPayload = async (payloadString) => {
     const hash = ec.hash().update(payloadString).digest();
     
     const signature = keyPair.sign(hash);
-    const signatureDer = signature.toDER('hex');
-    const signatureBase64 = Buffer.from(signatureDer, 'hex').toString('base64');
+    // Backend SHA256withECDSAinP1363Format bekler (WebCrypto ile aynı): 32 bayt r || 32 bayt s
+    const signatureRaw = Buffer.concat([
+      signature.r.toArrayLike(Buffer, 'be', 32),
+      signature.s.toArrayLike(Buffer, 'be', 32),
+    ]);
+    const signatureBase64 = signatureRaw.toString('base64');
 
     return {
       signature: signatureBase64,

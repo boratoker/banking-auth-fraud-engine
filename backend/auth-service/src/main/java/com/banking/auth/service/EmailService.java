@@ -1,6 +1,6 @@
 package com.banking.auth.service;
 
-import com.banking.auth.model.Transaction;
+import com.banking.auth.notification.NotificationMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -10,7 +10,6 @@ import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 
 import jakarta.mail.internet.MimeMessage;
-import java.time.format.DateTimeFormatter;
 
 @Service
 public class EmailService {
@@ -118,7 +117,43 @@ public class EmailService {
         }
     }
 
-    public void sendFraudAlertEmail(String toEmail, Transaction txn) {
+    public void sendTransferReceiptEmail(NotificationMessage txn) {
+        String toEmail = txn.getTo();
+        log.info("🧾 TRANSFER DEKONTU: [{}] → {}", txn.getReferenceId(), toEmail);
+
+        if (fromEmail == null || fromEmail.isBlank() || mailSender == null) {
+            log.info("[E-Posta Simülasyonu] MailSender aktif değil. Transfer dekontu konsola yazıldı.");
+            return;
+        }
+
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+            helper.setFrom(fromEmail, "TokerBank Digital");
+            helper.setTo(toEmail);
+            helper.setSubject("TokerBank FAST Transfer Dekontu - " + txn.getAmount() + " " + txn.getCurrency());
+
+            String htmlContent = "<div style=\"font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e0e0e0; border-radius: 12px;\">"
+                    + "<h2 style=\"color: #003399; margin-top: 0;\">Transferiniz Gerçekleşti</h2>"
+                    + "<table style=\"width: 100%; border-collapse: collapse;\">"
+                    + "<tr><td style=\"padding: 10px; border-bottom: 1px solid #eee; font-weight: bold; width: 35%;\">Tutar:</td><td style=\"padding: 10px; border-bottom: 1px solid #eee;\">" + txn.getAmount() + " " + txn.getCurrency() + "</td></tr>"
+                    + "<tr><td style=\"padding: 10px; border-bottom: 1px solid #eee; font-weight: bold;\">Alıcı:</td><td style=\"padding: 10px; border-bottom: 1px solid #eee;\">" + txn.getRecipient() + "</td></tr>"
+                    + "<tr><td style=\"padding: 10px; border-bottom: 1px solid #eee; font-weight: bold;\">İşlem Tarihi:</td><td style=\"padding: 10px; border-bottom: 1px solid #eee;\">" + txn.getCreatedAt() + "</td></tr>"
+                    + "<tr><td style=\"padding: 10px; border-bottom: 1px solid #eee; font-weight: bold;\">Referans No:</td><td style=\"padding: 10px; border-bottom: 1px solid #eee;\">" + txn.getReferenceId() + "</td></tr>"
+                    + "</table>"
+                    + "</div>";
+
+            helper.setText(htmlContent, true);
+            mailSender.send(message);
+            log.info("Transfer dekontu e-postası gönderildi: {}", toEmail);
+        } catch (Exception e) {
+            log.warn("Transfer dekontu e-postası gönderilemedi: {}", e.getMessage());
+        }
+    }
+
+    public void sendFraudAlertEmail(NotificationMessage txn) {
+        String toEmail = txn.getTo();
         log.info("=================================================================");
         log.info("🚨 YÜKSEK RİSKLİ İŞLEM BİLDİRİMİ: [{}]", txn.getReferenceId());
         log.info("📧 ALICI E-POSTA: [{}]", toEmail);
@@ -137,8 +172,8 @@ public class EmailService {
             helper.setTo(toEmail);
             helper.setSubject("DİKKAT: Yüksek Tutarlı/Riskli İşlem Gerçekleşti - " + txn.getAmount() + " " + txn.getCurrency());
 
-            String dateStr = txn.getCreatedAt() != null ? txn.getCreatedAt().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")) : "Bilinmiyor";
-            String recipient = txn.getRecipientName() != null ? txn.getRecipientName() : txn.getDestIban();
+            String dateStr = txn.getCreatedAt();
+            String recipient = txn.getRecipient();
 
             String htmlContent = "<div style=\"font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e0e0e0; border-radius: 12px;\">"
                     + "<div style=\"background-color: #ffeaea; padding: 16px; border-left: 4px solid #cc0000; margin-bottom: 24px;\">"

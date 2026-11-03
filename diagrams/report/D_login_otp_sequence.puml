@@ -1,0 +1,98 @@
+@startuml D_Login_OTP_Sequence
+' Appendix D – Login & OTP Sequence Diagram
+
+title TokerBank – Multi-Step Login with Email OTP
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 12
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam database {
+  BackgroundColor #ECEFF1
+  BorderColor #546E7A
+}
+skinparam queue {
+  BackgroundColor #ECEFF1
+  BorderColor #546E7A
+}
+skinparam actor {
+  BackgroundColor #FFFFFF
+  BorderColor #546E7A
+}
+skinparam sequence {
+  ArrowColor #455A64
+  LifeLineBorderColor #90A4AE
+  ParticipantBorderColor #546E7A
+  ParticipantBackgroundColor #FFFFFF
+  GroupBorderColor #90A4AE
+  GroupBackgroundColor #F5F5F5
+}
+skinparam note {
+  BackgroundColor #FFFDE7
+  BorderColor #F9A825
+}
+autonumber "<b>0."
+
+actor "User" as U
+participant "Web / Mobile\nClient" as C #E3F2FD
+participant "API Gateway\n:8080" as GW #FFF3E0
+participant "AuthController\n:8081" as A #E8F5E9
+database "PostgreSQL" as PG
+database "Redis\n(OtpStore)" as R
+queue "RabbitMQ" as MQ
+participant "Notification\nConsumer" as NC #E8F5E9
+participant "SMTP\nServer" as SMTP
+
+== Step 1: Identify the user ==
+U -> C : enter email
+C -> GW : POST /api/v1/auth/login
+GW -> GW : CORS check + rate limit\n(5 req/s per IP)
+GW -> A : forward
+A -> PG : find user by email
+A --> C : 200 { requiresPassword: true }
+
+== Step 2: Verify password and issue OTP ==
+U -> C : enter password
+C -> GW : POST /api/v1/auth/verify-password
+GW -> A : forward
+A -> PG : load password_hash
+A -> A : BCrypt.matches(password, hash)
+
+alt password is wrong
+  A -> PG : save last_failed_login_at
+  A --> C : 401 Wrong password
+else password is correct
+  A -> A : otp = SecureRandom 6 digits
+  A -> R : SET "OTP:<email>" = otp\n**TTL 120 s**
+  A ->> MQ : publish OTP notification
+  A --> C : 200 OTP sent
+  C -> C : start 2-minute countdown
+  MQ ->> NC : consume (asynchronous)
+  NC -> SMTP : send OTP email
+  SMTP -->> U : email with OTP code
+end
+
+note over A, MQ
+  The HTTP response does not wait for the
+  mail server: email delivery runs on the
+  RabbitMQ consumer.
+end note
+
+== Step 3: Verify OTP and create session ==
+U -> C : enter OTP code
+C -> GW : POST /api/v1/auth/verify-otp
+GW -> A : forward
+A -> R : GET "OTP:<email>"
+
+alt code matches (constant-time comparison)
+  A -> R : DEL "OTP:<email>"\n(single use – replay protection)
+  A -> A : sessionToken = 256-bit random value
+  A -> PG : save user_sessions\n(SHA-256(token), device, IP, is_active = true)
+  A --> C : 200 { sessionToken, userId }
+  C -> C : attach token as X-Session-Token\nto every banking request
+else code wrong or expired (TTL elapsed)
+  A --> C : 400 Invalid or expired OTP
+end
+
+@enduml

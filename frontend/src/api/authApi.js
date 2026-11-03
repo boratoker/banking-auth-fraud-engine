@@ -51,6 +51,10 @@ export const verifyOtp = async (email, otp, mode = 'login') => {
   });
 };
 
+export const logout = async () => {
+  return await axios.post(`${API_BASE_URL}/logout`);
+};
+
 export const forgotPasswordInit = async (email) => {
   return await axios.post(`${API_BASE_URL}/forgot-password/init`, { email });
 };

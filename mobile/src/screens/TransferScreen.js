@@ -93,7 +93,11 @@ const TransferScreen = () => {
       setLoading(false);
       const data = res.data;
 
-      if (data.requiresOtp || data.riskLevel === 'HIGH') {
+      if (data.requiresPush) {
+        // Orta/yüksek risk: işlem mobil onay bekliyor, onay bildirimi uygulama içinde gösterilir
+        Alert.alert('Onay Gerekli', 'İşleminiz ek güvenlik onayı bekliyor. Gelen bildirimden onaylayınız.');
+        clearForm();
+      } else if (data.requiresOtp) {
         setFraudModalData({
           riskLevel: data.riskLevel,
           riskScore: data.riskScore || 68,
@@ -111,7 +115,7 @@ const TransferScreen = () => {
     } catch (err) {
       setLoading(false);
       
-      const errorMessage = err.response?.data?.error || 'İşlem gerçekleştirilemedi.';
+      const errorMessage = err.response?.data?.error || err.message || 'İşlem gerçekleştirilemedi.';
       setErrorMsg(errorMessage);
       Alert.alert('Hata', errorMessage);
       
@@ -124,7 +128,7 @@ const TransferScreen = () => {
 
   const handleConfirmFraudOtp = async () => {
     if (!modalOtpInput || modalOtpInput.trim().length !== 6) {
-      Alert.alert('Hata', 'Lütfen 6 haneli doğrulama kodunu giriniz (Örn: 123456).');
+      Alert.alert('Hata', 'Lütfen 6 haneli doğrulama kodunu giriniz.');
       return;
     }
 
@@ -140,14 +144,7 @@ const TransferScreen = () => {
       setSuccessMsg(res.data.message || `✅ Güvenlik OTP doğrulandı! ₺${fraudModalData.amount.toLocaleString('tr-TR')} transferiniz alıcıya iletildi.`);
       clearForm();
     } catch (err) {
-      if (modalOtpInput === '123456') {
-        setShowFraudModal(false);
-        setModalOtpInput('');
-        setSuccessMsg(`✅ Güvenlik OTP doğrulandı! ₺${fraudModalData.amount.toLocaleString('tr-TR')} transferiniz alıcıya iletildi.`);
-        clearForm();
-      } else {
-        Alert.alert('Doğrulama Başarısız', err.response?.data?.error || 'Geçersiz OTP Kodu (Test Kodu: 123456).');
-      }
+      Alert.alert('Doğrulama Başarısız', err.response?.data?.error || 'Geçersiz veya süresi dolmuş OTP kodu.');
     } finally {
       setModalLoading(false);
     }

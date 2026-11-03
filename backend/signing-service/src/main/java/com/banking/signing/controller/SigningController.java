@@ -13,6 +13,7 @@ import java.security.PublicKey;
 import java.security.Signature;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -39,8 +40,9 @@ public class SigningController {
             return ResponseEntity.badRequest().body(Map.of("error", "User ID and Public Key are required"));
         }
 
-        Optional<UserPublicKey> existing = repository.findByUserId(request.getUserId());
-        UserPublicKey key = existing.orElse(new UserPublicKey());
+        // Bir kullanıcının birden fazla cihazı (web tarayıcı, mobil) olabilir: her cihazın açık anahtarı ayrı tutulur
+        UserPublicKey key = repository.findByUserIdAndPublicKey(request.getUserId(), request.getPublicKey())
+                .orElse(new UserPublicKey());
         
         key.setUserId(request.getUserId());
         key.setPublicKey(request.getPublicKey());
@@ -57,13 +59,14 @@ public class SigningController {
             return ResponseEntity.badRequest().body(Map.of("error", "User ID, Payload, and Signature are required"));
         }
 
-        Optional<UserPublicKey> keyOpt = repository.findByUserId(request.getUserId());
-        if (keyOpt.isEmpty()) {
+        List<UserPublicKey> keys = repository.findAllByUserId(request.getUserId());
+        if (keys.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("error", "No enrolled device found for user. Please enroll first."));
         }
 
-        String pubKeyStr = keyOpt.get().getPublicKey();
-        boolean isValid = verifyECDSA(request.getPayload(), request.getSignature(), pubKeyStr);
+        // İmza, kullanıcının kayıtlı cihazlarından herhangi birinin özel anahtarıyla atılmış olmalı
+        boolean isValid = keys.stream()
+                .anyMatch(k -> verifyECDSA(request.getPayload(), request.getSignature(), k.getPublicKey()));
 
         if (isValid) {
             return ResponseEntity.ok(Map.of("message", "Signature is valid. Transaction approved.", "valid", true));

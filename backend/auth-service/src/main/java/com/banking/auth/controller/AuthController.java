@@ -9,12 +9,14 @@ import com.banking.auth.model.User;
 import com.banking.auth.model.UserSession;
 import com.banking.auth.repository.UserRepository;
 import com.banking.auth.repository.UserSessionRepository;
-import com.banking.auth.service.EmailService;
+import com.banking.auth.notification.NotificationMessage;
+import com.banking.auth.notification.NotificationPublisher;
+import com.banking.auth.security.SessionTokens;
+import com.banking.auth.service.OtpStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.bind.annotation.*;
@@ -25,8 +27,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Random;
-import java.util.concurrent.ConcurrentHashMap;
+import java.security.SecureRandom;
 
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -36,25 +37,24 @@ public class AuthController {
     private static final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
     private static final DateTimeFormatter DT_FORMAT = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss");
 
-    @Autowired(required = false)
-    private StringRedisTemplate redisTemplate;
-
-    @Autowired(required = false)
-    private RabbitTemplate rabbitTemplate;
+    private static final SecureRandom RANDOM = new SecureRandom();
 
     @Autowired(required = false)
     private KafkaTemplate<String, String> kafkaTemplate;
 
-    private final EmailService emailService;
+    /** Geliştirme kolaylığı olan "123456" ana şifre/OTP kabulü; varsayılan olarak kapalı. */
+    @Value("${app.security.dev-bypass-enabled:false}")
+    private boolean devBypassEnabled;
+
+    private final NotificationPublisher notificationPublisher;
+    private final OtpStore otpStore;
     private final UserRepository userRepository;
     private final UserSessionRepository userSessionRepository;
 
-    // Fallback in-memory map for OTP storage if Redis is offline
-    private final Map<String, String> otpFallbackMap = new ConcurrentHashMap<>();
-    private final Map<String, String> pendingRegistrationsFallback = new ConcurrentHashMap<>();
-
-    public AuthController(EmailService emailService, UserRepository userRepository, UserSessionRepository userSessionRepository) {
-        this.emailService = emailService;
+    public AuthController(NotificationPublisher notificationPublisher, OtpStore otpStore,
+                          UserRepository userRepository, UserSessionRepository userSessionRepository) {
+        this.notificationPublisher = notificationPublisher;
+        this.otpStore = otpStore;
         this.userRepository = userRepository;
         this.userSessionRepository = userSessionRepository;
     }
@@ -126,7 +126,8 @@ public class AuthController {
 
         User user = userOpt.get();
 
-        if (!request.getPassword().equals("123456") && !passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
+        boolean devBypass = devBypassEnabled && "123456".equals(request.getPassword());
+        if (!devBypass && !passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
             // Başarısız giriş — tarihi kaydet
             LocalDateTime failedAt = LocalDateTime.now();
             user.setLastFailedLoginAt(failedAt);
@@ -226,12 +227,9 @@ public class AuthController {
         }
 
         String email = request.getEmail().trim().toLowerCase();
-        String storedOtp = getStoredOtp(email);
-        String inputOtp = request.getOtp().trim();
 
-        if ("123456".equals(inputOtp) || (storedOtp != null && storedOtp.equals(inputOtp))) {
-            clearStoredOtp(email);
-
+        // OTP Redis'te 120 sn TTL ile tutulur ve eşleştiği anda silinir (tek kullanımlık)
+        if (isDevBypassOtp(request.getOtp()) || otpStore.verifyAndConsume(otpKey(email), request.getOtp())) {
             User user;
             String mode = request.getMode() != null ? request.getMode() : "login";
 
@@ -277,6 +275,10 @@ public class AuthController {
             session.setBrowser(request.getBrowser() != null ? request.getBrowser() : "Mobile App");
             session.setActive(true);
             session.setLastActiveAt(LocalDateTime.now());
+
+            // Her girişte yeni oturum token'ı üretilir; DB'de yalnızca SHA-256 özeti tutulur
+            String sessionToken = SessionTokens.generate();
+            session.setSessionTokenHash(SessionTokens.hash(sessionToken));
             userSessionRepository.save(session);
 
             String msg = "register".equals(mode)
@@ -288,7 +290,9 @@ public class AuthController {
                 "firstName", user.getFirstName(),
                 "lastName", user.getLastName(),
                 "email", user.getEmail(),
-                "userId", user.getId().toString()
+                "userId", user.getId().toString(),
+                "sessionId", session.getId().toString(),
+                "sessionToken", sessionToken
             ));
         }
 
@@ -326,10 +330,11 @@ public class AuthController {
         }
 
         String email = request.getEmail().trim().toLowerCase();
-        String storedOtp = getStoredOtp(email);
+        String storedOtp = otpStore.get(otpKey(email));
         String inputOtp = request.getOtp().trim();
 
-        if ("123456".equals(inputOtp) || (storedOtp != null && storedOtp.equals(inputOtp))) {
+        // Bu adım yalnızca kontrol eder; kod, şifre sıfırlandığında tüketilir
+        if (isDevBypassOtp(inputOtp) || (storedOtp != null && storedOtp.equals(inputOtp))) {
             return ResponseEntity.ok(Map.of("message", "OTP doğrulandı."));
         }
 
@@ -350,13 +355,10 @@ public class AuthController {
         }
 
         String email = request.getEmail().trim().toLowerCase();
-        String storedOtp = getStoredOtp(email);
-        String inputOtp = request.getOtp().trim();
 
-        if ("123456".equals(inputOtp) || (storedOtp != null && storedOtp.equals(inputOtp))) {
+        if (isDevBypassOtp(request.getOtp()) || otpStore.verifyAndConsume(otpKey(email), request.getOtp())) {
             Optional<User> userOpt = userRepository.findByEmail(email);
             if (userOpt.isPresent()) {
-                clearStoredOtp(email);
                 User user = userOpt.get();
                 user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
                 userRepository.save(user);
@@ -372,105 +374,53 @@ public class AuthController {
         return ResponseEntity.badRequest().body(Map.of("error", "Geçersiz veya süresi dolmuş OTP!"));
     }
 
+    // Çıkış: mevcut oturum token'ını geçersiz kılar
+    @PostMapping("/logout")
+    public ResponseEntity<Map<String, Object>> logout(@RequestHeader(SessionTokens.HEADER) String sessionToken) {
+        userSessionRepository.findBySessionTokenHash(SessionTokens.hash(sessionToken)).ifPresent(s -> {
+            s.setActive(false);
+            userSessionRepository.save(s);
+        });
+        return ResponseEntity.ok(Map.of("success", true));
+    }
+
     // --- Yardımcı metodlar ---
 
     private String generateAndSendOtp(String email, String mode, String channel) {
-        String otp = String.format("%06d", new Random().nextInt(999999));
-        long expiryTime = System.currentTimeMillis() + (2 * 60 * 1000); // 2 dakika
-
-        try {
-            if (redisTemplate != null) {
-                redisTemplate.opsForValue().set("OTP:" + email, otp, Duration.ofMinutes(2));
-            } else {
-                otpFallbackMap.put(email, otp + ":" + expiryTime);
-            }
-        } catch (Exception e) {
-            log.warn("Redis kaydı başarısız, in-memory saklanıyor: {}", e.getMessage());
-            otpFallbackMap.put(email, otp + ":" + expiryTime);
-        }
+        String otp = String.format("%06d", RANDOM.nextInt(1_000_000));
+        otpStore.put(otpKey(email), otp, OtpStore.OTP_TTL);
 
         if ("MOBILE".equalsIgnoreCase(channel)) {
             log.info("📱 [{}] için OTP mobil cihaza Push Notification olarak gönderildi: {}", email, otp);
             // In a real scenario, this would call FCM/APNS to push to the device
         } else {
-            try {
-                emailService.sendOtpEmail(email, otp, mode);
-            } catch (Exception e) {
-                log.warn("E-posta gönderimi uyarısı: {}", e.getMessage());
-            }
+            // E-posta RabbitMQ üzerinden asenkron gönderilir; HTTP yanıtı SMTP'yi beklemez
+            notificationPublisher.publish(NotificationMessage.otp(email, otp, mode));
         }
 
         sendKafkaEvent("LOGIN_ATTEMPT:" + email);
         return otp;
     }
 
-    private String getStoredOtp(String email) {
-        try {
-            if (redisTemplate != null) {
-                String val = redisTemplate.opsForValue().get("OTP:" + email);
-                if (val != null) return val;
-            }
-        } catch (Exception e) {
-            log.warn("Redis okuma hatası: {}", e.getMessage());
-        }
-
-        String raw = otpFallbackMap.get(email);
-        if (raw != null && raw.contains(":")) {
-            String[] parts = raw.split(":");
-            long expiry = Long.parseLong(parts[1]);
-            if (System.currentTimeMillis() <= expiry) {
-                return parts[0];
-            } else {
-                otpFallbackMap.remove(email);
-            }
-        }
-        return null;
+    private static String otpKey(String email) {
+        return "OTP:" + email;
     }
 
-    private void clearStoredOtp(String email) {
-        try {
-            if (redisTemplate != null) {
-                redisTemplate.delete("OTP:" + email);
-            }
-        } catch (Exception e) {
-            // Ignore
-        }
-        otpFallbackMap.remove(email);
+    private boolean isDevBypassOtp(String otp) {
+        return devBypassEnabled && otp != null && "123456".equals(otp.trim());
     }
 
     private void savePendingRegistration(String email, String firstName, String lastName, String hashedPassword) {
         String data = firstName + "|" + lastName + "|" + hashedPassword;
-        try {
-            if (redisTemplate != null) {
-                redisTemplate.opsForValue().set("PENDING_REG:" + email, data, Duration.ofMinutes(10));
-                return;
-            }
-        } catch (Exception e) {
-            log.warn("Redis kaydı başarısız, pending registration in-memory saklanıyor: {}", e.getMessage());
-        }
-        pendingRegistrationsFallback.put(email, data);
+        otpStore.put("PENDING_REG:" + email, data, Duration.ofMinutes(10));
     }
 
     private String getPendingRegistration(String email) {
-        try {
-            if (redisTemplate != null) {
-                String val = redisTemplate.opsForValue().get("PENDING_REG:" + email);
-                if (val != null) return val;
-            }
-        } catch (Exception e) {
-            log.warn("Redis okuma başarısız: {}", e.getMessage());
-        }
-        return pendingRegistrationsFallback.get(email);
+        return otpStore.get("PENDING_REG:" + email);
     }
 
     private void clearPendingRegistration(String email) {
-        try {
-            if (redisTemplate != null) {
-                redisTemplate.delete("PENDING_REG:" + email);
-                return;
-            }
-        } catch (Exception e) {}
-        pendingRegistrationsFallback.remove(email);
+        otpStore.delete("PENDING_REG:" + email);
     }
 
     private void sendKafkaEvent(String message) {

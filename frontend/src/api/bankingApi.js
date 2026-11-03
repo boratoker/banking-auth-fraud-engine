@@ -80,10 +80,38 @@ export const getContacts = async () => {
   return await axios.get(`${API_BASE_URL}/contacts`);
 };
 
-export const setAuthEmail = (email) => {
+export const enrollDevicePublicKey = async (publicKey, deviceName) => {
+  return await axios.post(`${API_BASE_URL}/security/enroll-device`, { publicKey, deviceName });
+};
+
+// Oturum: backend kullanıcıyı X-Session-Token ile doğrular; sonlandırılmış oturum 401 döner
+export const setAuthSession = (email, sessionToken) => {
   if (email) {
     axios.defaults.headers.common['X-User-Email'] = email;
   } else {
     delete axios.defaults.headers.common['X-User-Email'];
   }
+  if (sessionToken) {
+    axios.defaults.headers.common['X-Session-Token'] = sessionToken;
+  } else {
+    delete axios.defaults.headers.common['X-Session-Token'];
+  }
+};
+
+let unauthorizedInterceptor = null;
+
+/** Oturum uzaktan sonlandırıldığında (401) çağrılacak işleyiciyi kaydeder. */
+export const onSessionExpired = (handler) => {
+  if (unauthorizedInterceptor !== null) {
+    axios.interceptors.response.eject(unauthorizedInterceptor);
+  }
+  unauthorizedInterceptor = axios.interceptors.response.use(
+    (res) => res,
+    (err) => {
+      if (err.response?.status === 401 && err.config?.url?.startsWith(API_BASE_URL)) {
+        handler(err.response.data?.error);
+      }
+      return Promise.reject(err);
+    }
+  );
 };

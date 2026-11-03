@@ -1,0 +1,158 @@
+@startuml C_ER_Diagram
+' Appendix C – Database ER Diagram (PostgreSQL, generated from the JPA entities)
+
+title TokerBank – Database ER Diagram
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 11
+skinparam shadowing false
+skinparam roundcorner 6
+skinparam linetype ortho
+skinparam nodesep 50
+skinparam ranksep 60
+skinparam ArrowColor #455A64
+skinparam class {
+  BackgroundColor #FFFFFF
+  BorderColor #546E7A
+  HeaderBackgroundColor #E3F2FD
+}
+hide circle
+hide methods
+
+entity "users" as users {
+  * id : UUID <<PK>>
+  --
+  * email : VARCHAR(255) <<UQ>>
+  first_name : VARCHAR
+  last_name : VARCHAR
+  password_hash : VARCHAR (bcrypt)
+  email_verified : BOOLEAN
+  last_failed_login_at : TIMESTAMP
+  created_at : TIMESTAMP
+  updated_at : TIMESTAMP
+}
+
+entity "accounts" as accounts {
+  * id : UUID <<PK>>
+  --
+  * user_id : UUID <<FK>>
+  * account_number : VARCHAR(30) <<UQ>>
+  * iban : VARCHAR(34) <<UQ>>
+  name : VARCHAR
+  account_type : VARCHAR
+  currency : VARCHAR
+  balance : NUMERIC
+  interest_rate : NUMERIC
+  maturity_date : DATE
+  status : VARCHAR
+  created_at : TIMESTAMP
+}
+
+entity "cards" as cards {
+  * id : UUID <<PK>>
+  --
+  * user_id : UUID <<FK>>
+  account_id : UUID <<FK>>
+  card_number_masked : VARCHAR
+  card_number_encrypted : VARCHAR
+  card_holder : VARCHAR
+  expiry_date : VARCHAR
+  card_type : VARCHAR
+  is_frozen : BOOLEAN
+  internet_allowed : BOOLEAN
+  overseas_allowed : BOOLEAN
+  total_limit : NUMERIC
+  current_spent : NUMERIC
+}
+
+entity "transactions" as transactions {
+  * id : UUID <<PK>>
+  --
+  * reference_id : VARCHAR(30) <<UQ>>
+  * user_id : UUID <<FK>>
+  source_account_id : UUID <<FK>>
+  dest_account_id : UUID <<FK>>
+  source_iban : VARCHAR
+  dest_iban : VARCHAR
+  recipient_name : VARCHAR
+  amount : NUMERIC
+  currency : VARCHAR
+  transfer_type : VARCHAR
+  description : VARCHAR
+  status : VARCHAR
+  created_at : TIMESTAMP
+  completed_at : TIMESTAMP
+}
+
+entity "user_sessions" as sessions {
+  * id : UUID <<PK>>
+  --
+  * user_id : UUID <<FK>>
+  session_token_hash : VARCHAR (SHA-256)
+  device_info : VARCHAR
+  device_type : VARCHAR
+  device_fingerprint : VARCHAR
+  ip_address : VARCHAR
+  location : VARCHAR
+  browser : VARCHAR
+  is_active : BOOLEAN
+  last_active_at : TIMESTAMP
+  created_at : TIMESTAMP
+}
+
+entity "user_security_settings" as settings {
+  * id : UUID <<PK>>
+  --
+  * user_id : UUID <<FK, UQ>>
+  two_factor_enabled : BOOLEAN
+  biometrics_enabled : BOOLEAN
+  daily_transfer_limit : NUMERIC
+  daily_spent_today : NUMERIC
+  last_limit_reset_date : DATE
+}
+
+entity "beneficiary_contacts" as beneficiaries {
+  * id : UUID <<PK>>
+  --
+  * user_id : UUID <<FK>>
+  name : VARCHAR
+  iban : VARCHAR
+  bank_name : VARCHAR
+  alias : VARCHAR
+  is_favorite : BOOLEAN
+}
+
+entity "security_audit_logs" as audit {
+  * id : UUID <<PK>>
+  --
+  user_id : UUID <<FK>>
+  event_type : VARCHAR
+  severity : VARCHAR
+  ip_address : VARCHAR
+  user_agent : VARCHAR
+  details : TEXT
+  created_at : TIMESTAMP
+}
+
+entity "user_public_keys\n(Signing Service)" as keys #F3E5F5 {
+  * id : BIGINT <<PK>>
+  --
+  * user_id : UUID
+  public_key : TEXT (SPKI PEM)
+  device_name : VARCHAR
+  created_at : TIMESTAMP
+}
+
+users ||--o{ accounts : owns
+users ||--o{ cards : holds
+accounts |o--o{ cards : linked to
+users ||--o{ transactions : initiates
+accounts |o--o{ transactions : "source / destination"
+users ||--o{ sessions : has
+users ||--|| settings : configures
+users ||--o{ beneficiaries : saves
+users |o--o{ audit : generates
+users ||..o{ keys : "enrolls devices\n(logical reference)"
+
+@enduml

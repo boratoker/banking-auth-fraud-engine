@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { checkEmail, login, verifyPassword, register, verifyOtp, forgotPasswordInit, forgotPasswordVerifyOtp, forgotPasswordReset } from './api/authApi';
-import { setAuthEmail } from './api/bankingApi';
+import { checkEmail, login, verifyPassword, register, verifyOtp, logout, forgotPasswordInit, forgotPasswordVerifyOtp, forgotPasswordReset } from './api/authApi';
+import { setAuthSession, onSessionExpired } from './api/bankingApi';
+import { ensureDeviceEnrolled } from './utils/CryptoService';
 import MainDashboardView from './view/MainDashboardView';
 import tokerbankLogo from './assets/tokerbank-logo.png';
 import './App.css';
@@ -118,8 +119,22 @@ function App() {
     setStep('login'); setEmail(''); setFirstName(''); setLastName('');
     setPassword(''); setConfirmPassword(''); setOtp('');
     setMessage(''); setError(''); setUserName(''); setOtpMode('login'); setTimeLeft(120);
-    setAuthEmail(null);
+    setAuthSession(null, null);
+    localStorage.removeItem('user');
   };
+
+  const handleLogout = async () => {
+    try { await logout(); } catch { /* oturum zaten geçersiz olabilir */ }
+    resetForm();
+  };
+
+  // Oturum başka bir cihazdan sonlandırılırsa sonraki API çağrısı 401 döner → giriş ekranına dön
+  useEffect(() => {
+    onSessionExpired((msg) => {
+      resetForm();
+      setError(msg || 'Oturumunuz sonlandırıldı. Lütfen tekrar giriş yapınız.');
+    });
+  }, []);
 
 
   // Step 1: E-posta kontrol
@@ -282,7 +297,15 @@ function App() {
       const res = await verifyOtp(email, otp, otpMode);
       setMessage(res.data.message);
       setUserName(res.data.firstName || '');
-      setAuthEmail(email);
+      setAuthSession(email, res.data.sessionToken);
+      localStorage.setItem('user', JSON.stringify({ id: res.data.userId, email }));
+
+      // Transaction Signing: cihazın ECDSA açık anahtarını oturumdaki kullanıcıya kaydet
+      try {
+        await ensureDeviceEnrolled('Web Tarayıcı');
+      } catch (enrollErr) {
+        console.warn('Cihaz imza anahtarı kaydedilemedi:', enrollErr.message);
+      }
       setStep('success');
     } catch (err) {
       setError(err.response?.data?.error || err.message);
@@ -293,7 +316,7 @@ function App() {
   if (step === 'success') {
     return (
       <>
-        <MainDashboardView userName={userName} email={email} onLogout={resetForm} />
+        <MainDashboardView userName={userName} email={email} onLogout={handleLogout} />
         <FailedLoginToast info={failedLoginInfo} onDismiss={() => setFailedLoginInfo(null)} />
       </>
     );

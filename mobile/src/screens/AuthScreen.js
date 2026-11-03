@@ -13,7 +13,8 @@ import {
   Vibration,
 } from 'react-native';
 import { checkEmail, login, verifyPassword, register, verifyOtp, enrollDevice } from '../api/authApi';
-import { generateAndEnrollKeyPair, hasEnrolledKey } from '../utils/CryptoService';
+import { getOrCreatePublicKey } from '../utils/CryptoService';
+import { setAuthEmail, setSessionToken } from '../api/config';
 import { getDeviceInfo } from '../utils/DeviceUtils';
 import { colors } from '../theme/colors';
 import { globalStyles } from '../theme/styles';
@@ -239,16 +240,17 @@ const AuthScreen = ({ onAuthSuccess }) => {
     setMessage(''); setError('Cihaz kaydediliyor, lütfen bekleyin...'); setLoading(true);
     try {
       const res = await verifyOtp(email, otp, otpMode);
+      setAuthEmail(email);
+      setSessionToken(res.data.sessionToken);
       
-      // Kriptografik anahtar üretimi ve kaydı
-      const isEnrolled = await hasEnrolledKey();
-      if (!isEnrolled) {
-        const keyRes = await generateAndEnrollKeyPair();
+      // Kriptografik anahtar üretimi ve kaydı (her girişte oturumdaki kullanıcıya kaydedilir)
+      try {
+        const keyRes = await getOrCreatePublicKey();
         if (keyRes.success) {
-          const deviceName = getDeviceInfo();
-          const userId = res.data.userId || email; // fallback to email if userId not returned
-          await enrollDevice(userId, keyRes.publicKey, deviceName);
+          await enrollDevice(keyRes.publicKey, getDeviceInfo());
         }
+      } catch (enrollErr) {
+        console.warn('Cihaz imza anahtarı kaydedilemedi:', enrollErr.message);
       }
 
       const name = res.data.firstName || userName || 'Değerli Müşterimiz';

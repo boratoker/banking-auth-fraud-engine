@@ -1,3 +1,4 @@
 /Users/boratoker/workspace/banking-auth-fraud-engine/backend/auth-service/src/test/java/com/banking/auth/service/BankingServiceTest.java
+/Users/boratoker/workspace/banking-auth-fraud-engine/backend/auth-service/src/test/java/com/banking/auth/service/ConcurrentTransferIntegrationTest.java
 /Users/boratoker/workspace/banking-auth-fraud-engine/backend/auth-service/src/test/java/com/banking/auth/ml/MlFraudInferenceEngineTest.java
 /Users/boratoker/workspace/banking-auth-fraud-engine/backend/auth-service/src/test/java/com/banking/auth/ml/FeatureEngineeringServiceTest.java

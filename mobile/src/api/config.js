@@ -30,7 +30,35 @@ export const setAuthEmail = (email) => {
     apiClient.defaults.headers.common['X-User-Email'] = email;
   } else {
     delete apiClient.defaults.headers.common['X-User-Email'];
+    delete apiClient.defaults.headers.common['X-Session-Token'];
   }
+};
+
+// Backend kullanıcıyı X-Session-Token ile doğrular; sonlandırılmış oturum 401 döner
+export const setSessionToken = (token) => {
+  if (token) {
+    apiClient.defaults.headers.common['X-Session-Token'] = token;
+  } else {
+    delete apiClient.defaults.headers.common['X-Session-Token'];
+  }
+};
+
+let unauthorizedInterceptor = null;
+
+/** Oturum uzaktan sonlandırıldığında (401) çağrılacak işleyiciyi kaydeder. */
+export const onSessionExpired = (handler) => {
+  if (unauthorizedInterceptor !== null) {
+    apiClient.interceptors.response.eject(unauthorizedInterceptor);
+  }
+  unauthorizedInterceptor = apiClient.interceptors.response.use(
+    (res) => res,
+    (err) => {
+      if (err.response?.status === 401 && err.config?.url?.startsWith('/api/v1/banking')) {
+        handler(err.response.data?.error);
+      }
+      return Promise.reject(err);
+    }
+  );
 };
 
 export default apiClient;
